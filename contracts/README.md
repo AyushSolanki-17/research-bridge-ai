@@ -1,6 +1,6 @@
 # API contracts
 
-`openapi.json` is exported deterministically from the implemented FastAPI app. It currently describes only `GET /health`.
+`openapi.json` is exported deterministically from the implemented FastAPI app. It describes `GET /health`, `POST /v1/papers/resolve` and `POST /v1/graphs/outgoing`, including typed metadata, graph, evidence and failure responses.
 
 ```sh
 uv run --extra server python scripts/export_openapi.py

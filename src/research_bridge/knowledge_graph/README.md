@@ -64,6 +64,7 @@ provider work. Callers own injected clients; the adapter closes clients it creat
 Tests in `tests/knowledge_graph` cover hop depth, direction, evidence, cycles,
 merges, exact limits, controlled elapsed time, missing data and partial failures.
 `tests/ingestion/openalex/test_operation_budget.py` verifies physical HTTP
-accounting for retries and redirects. HTTP and CLI research exposure is separate.
+accounting for retries and redirects. HTTP and CLI call these same contracts;
+see the [runtime examples](../../../README.md).
 
 See [architecture](../../../docs/architecture.md).

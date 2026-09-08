@@ -11,7 +11,7 @@ uv sync --frozen --extra server
 uv run --extra server research-bridge-ai-api
 ```
 
-Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. The API currently exposes process health only. DOI/OpenAlex resolution and bounded outgoing citation exploration are available through the Python library; research HTTP/CLI commands are not yet implemented.
+Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. DOI/OpenAlex resolution and bounded outgoing citation exploration are available through the Python library, HTTP and CLI. Title search, incoming citations and filtering are not yet implemented.
 
 `RB_HOST` defaults to `127.0.0.1`; `RB_PORT` defaults to `8000`. `.env.example` documents optional settings. To load an env file, pass `uv run --env-file .env --extra server research-bridge-ai-api`; dotenv files are not loaded implicitly. No database or provider credentials are required.
 
@@ -28,7 +28,29 @@ uv run research-bridge --help
 uv run research-bridge --version
 ```
 
-Research commands will be added with their capabilities.
+Resolve a paper or explore its outgoing citations (these commands access OpenAlex):
+
+```sh
+uv run research-bridge resolve '10.7717/peerj.4375'
+uv run research-bridge explore W2741809807 --depth 2 --max-nodes 50 --max-edges 200 --max-requests 100 --max-seconds 30
+```
+
+Results are JSON on stdout. Resolution errors are JSON on stderr. CLI exit codes:
+0 success, 2 invalid input/settings, 3 missing seed, 4 provider failure, 5 truncated
+exploration, 130 cancellation. Failed or truncated exploration preserves its
+available graph on stdout; inspect `status`, `stop_reasons` and `unresolved`.
+
+With the local API running:
+
+```sh
+curl -X POST http://localhost:8000/v1/papers/resolve -H 'Content-Type: application/json' -d '{"identifier":"10.7717/peerj.4375"}'
+curl -X POST http://localhost:8000/v1/graphs/outgoing -H 'Content-Type: application/json' -d '{"identifier":"W2741809807","limits":{"depth":2,"max_nodes":50}}'
+```
+
+Omitted graph limits use library defaults. Both research endpoints are read-only
+operations expressed as POST requests and require no application authentication.
+See [HTTP responses and error codes](src/research_bridge/api/README.md). Network
+access is performed only when executing a research command or request.
 
 ## Resolve a paper with the library
 

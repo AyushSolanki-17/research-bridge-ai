@@ -13,5 +13,46 @@ routes call those contracts without moving business rules into HTTP handlers.
 without checking a database or external provider. `tests/api/test_health.py` verifies
 the response; `contracts/openapi.json` records the exported contract.
 
+## Research contracts
+
+`POST /v1/papers/resolve` accepts `{"identifier":"10.7717/peerj.4375"}` and
+returns a `ResolvedPaper`. `POST /v1/graphs/outgoing` accepts an identifier plus
+an optional `limits` object (`depth`, `max_nodes`, `max_edges`, `max_requests`,
+`max_seconds`) and returns an `ExplorationResult`. Unknown request fields and
+invalid field types are rejected. Identifiers are limited to 2048 characters.
+The application owns normalization, numeric bounds, traversal and evidence rules;
+the router only translates input and maps outcomes to HTTP. `app.py` composes
+the shared provider and use cases; tests inject an offline provider.
+
+Both operations acquire data without modifying remote records, require no
+application authentication and support arbitrary identifiers. Repeated requests
+may reflect newer provider metadata and observation times; no caching is implied.
+Outgoing singleton lookup has no pagination. Results use deterministic breadth-first
+ordering and limits documented in [knowledge graph](../knowledge_graph/README.md).
+
+| Outcome | HTTP response |
+| --- | --- |
+| Resolved paper | 200, paper and evidence |
+| Complete or truncated graph | 200, graph with explicit status and stop reasons |
+| Invalid identifier or limits | 422, error envelope |
+| Invalid JSON, fields or types | 422, `invalid_request` error envelope |
+| Missing paper | 404, `not_found` error envelope |
+| Resolution rate limit | 429, `rate_limited` error envelope |
+| Resolution timeout | 504, `provider_timeout` error envelope |
+| Resolution malformed response / exhausted retries | 502, `malformed_response` / `retries_exhausted` |
+| Graph seed missing | 404, failed graph with `seed_not_found` |
+| Graph provider failure | 502, failed graph retaining acquired data |
+
+Error envelopes contain `error.code` and a safe `error.message`; internal upstream
+exception text is not returned. Validation codes are `invalid_identifier`,
+`invalid_limits` or `invalid_request`. Graph cancellation propagates and stops
+acquisition, rather than returning a successful response. The library exception
+retains the partial result; delivery over a cancelled connection is not guaranteed.
+Missing metadata remains null or empty collections. IDs use `{"value":"W…"}`
+objects; source evidence includes an inspectable URL and observation timestamp.
+Every unresolved edge target is identified in the graph's `unresolved` entries.
+
+`tests/test_research_journeys.py` compares library, HTTP and CLI output against the
+same deterministic provider, including truncation, partial failures and safe errors.
 The independent command-line entrypoint lives in `research_bridge/cli.py`.
 See the [runtime commands](../../../README.md).

@@ -1,10 +1,10 @@
 # Citation Explorer tasks
 
-Status: identifier resolution and bounded outgoing citation exploration are implemented in the Python library with canonical metadata and provenance. Process health, CLI help/version, runtime configuration and build/check tooling also exist. Research HTTP/CLI commands remain unimplemented.
+Status: identifier resolution and bounded outgoing citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search, incoming/combined exploration and filtering remain unimplemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. HTTP and CLI exposure is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Title search with explicit selection is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -84,6 +84,21 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 3. **Expose resolution and exploration through HTTP and CLI**
 
    **Owner:** `api`, capability application contracts, `cli.py`.
+
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
+   `POST /v1/papers/resolve`, `POST /v1/graphs/outgoing`, `research-bridge resolve`
+   and `research-bridge explore` call the same library use cases. Offline journeys
+   in `tests/test_research_journeys.py` compare metadata, evidence, graph limits,
+   success, truncation and failures across callers. README examples and the OpenAPI
+   snapshot describe actual contracts. No database migration or authentication
+   dependency is introduced. Earlier process-health behavior is preserved.
+   Verification: Ruff lint/format, strict mypy, pytest (109 passed), exported
+   OpenAPI drift check and wheel/sdist build passed. A clean wheel installation
+   without FastAPI imported the library and CLI, then ran actual CLI processes
+   for resolution, complete/truncated exploration and invalid input against a
+   local synthetic HTTP provider. Two existing dependency deprecation warnings
+   remain. `docker build -t research-bridge-ai:local .` also passed. External
+   OpenAlex was not tested; no deployment or container publication was performed.
 
    **After this task:** A caller can resolve an identifier, request an outgoing graph and inspect its evidence from a terminal or HTTP client, using the same library behavior.
 
