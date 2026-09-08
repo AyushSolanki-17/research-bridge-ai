@@ -1,10 +1,10 @@
 # Citation Explorer tasks
 
-Status: identifier resolution is implemented in the Python library with canonical metadata and provenance. Process health, CLI help/version, runtime configuration and build/check tooling also exist. Citation exploration and research HTTP/CLI commands remain unimplemented.
+Status: identifier resolution and bounded outgoing citation exploration are implemented in the Python library with canonical metadata and provenance. Process health, CLI help/version, runtime configuration and build/check tooling also exist. Research HTTP/CLI commands remain unimplemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Outgoing citation exploration is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. HTTP and CLI exposure is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -53,6 +53,18 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 2. **Explore outgoing citations within limits**
 
    **Owner:** `knowledge_graph`.
+
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
+   Acceptance evidence: deterministic tests in `tests/knowledge_graph/test_explore.py`
+   and `tests/ingestion/openalex/test_operation_budget.py`. These cover hop depth,
+   cycles, deduplication, canonical merges, evidence, all count boundaries,
+   controlled elapsed time, incomplete references, failures and cancellation.
+   Numeric limits and exact completeness semantics are documented in the capability
+   README. Provider ports now accept a shared acquisition budget; custom providers
+   must account for every physical request. No database or migration is needed.
+   Verification: Ruff lint/format, strict mypy, pytest (87 passed), OpenAPI drift
+   check and wheel/sdist build passed. The suite remains offline; two existing
+   dependency deprecation warnings remain. Live provider and Docker not tested.
 
    **After this task:** Given an ingested seed, the library can return the papers it cites across 1–3 hops, with directed edges, evidence and explicit limits or missing references.
 

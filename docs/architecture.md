@@ -1,6 +1,6 @@
 # Architecture
 
-Status: the Python library resolves DOI and OpenAlex work identifiers through an injected provider port, returning canonical paper metadata and stable provenance. OpenAlex acquisition owns HTTP translation, validated timeouts, retries and cancellation. FastAPI exposes process health only; graph exploration and research transports remain unimplemented. See [runtime commands](../README.md).
+Status: the Python library resolves identifiers and explores bounded outgoing citation neighborhoods through an injected paper provider port. OpenAlex acquisition counts physical requests, redirects and retries against operation budgets. Knowledge graph owns breadth-first traversal, directed edges, evidence and partial-result semantics. FastAPI exposes process health only; research transports remain unimplemented. See [runtime commands](../README.md).
 
 ## Source layout
 

@@ -18,6 +18,7 @@ import httpx
 
 from research_bridge.ingestion.openalex.infrastructure.settings import OpenAlexSettings
 from research_bridge.provenance.domain.evidence import Evidence, InferenceStatus
+from research_bridge.research.papers.application.acquisition import AcquisitionBudget
 from research_bridge.research.papers.application.errors import (
     PaperNotFoundError,
     ProviderMalformedResponseError,
@@ -296,13 +297,16 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
     # Referenced works: list of OpenAlex URLs
     ref_ids: list[OpenAlexWorkId] = []
     raw_refs = payload.get("referenced_works")
+    references_complete = isinstance(raw_refs, list)
     if isinstance(raw_refs, list):
         for item in raw_refs:
             if not isinstance(item, str):
+                references_complete = False
                 continue
             try:
                 ref_ids.append(OpenAlexWorkId.parse(item))
             except Exception:
+                references_complete = False
                 continue
 
     identifiers = PaperIdentifiers(openalex_id=openalex_id, doi=doi_value)
@@ -316,6 +320,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
         cited_by_count=cited_by,
         topics=tuple(topics),
         referenced_works=tuple(ref_ids),
+        references_complete=references_complete,
     )
     # Evidence identity is stable, observation time does not affect id.
     evidence = Evidence.paper_evidence(
@@ -358,7 +363,9 @@ class OpenAlexPaperAdapter:
         # Prefer header auth to avoid key in URL logs.
         return {"Authorization": f"Bearer {self._settings.api_key}"}
 
-    async def fetch_paper(self, identifier: Doi | OpenAlexWorkId) -> ResolvedPaper:
+    async def fetch_paper(
+        self, identifier: Doi | OpenAlexWorkId, *, budget: AcquisitionBudget | None = None
+    ) -> ResolvedPaper:
         """Fetch and translate a single work.
 
         Bounded: each network request has an explicit timeout and the total
@@ -367,6 +374,7 @@ class OpenAlexPaperAdapter:
 
         Args:
             identifier: Canonical DOI or OpenAlex work identifier.
+            budget: Optional shared acquisition limits, including retries and redirects.
 
         Returns:
             Translated paper and stable source evidence.
@@ -390,7 +398,7 @@ class OpenAlexPaperAdapter:
             client = httpx.AsyncClient(follow_redirects=True)
 
         try:
-            return await self._fetch_with_retries(client, url, headers, identifier)
+            return await self._fetch_with_retries(client, url, headers, identifier, budget)
         finally:
             if owns and client is not None:
                 await client.aclose()
@@ -401,6 +409,7 @@ class OpenAlexPaperAdapter:
         url: str,
         headers: dict[str, str],
         identifier: Doi | OpenAlexWorkId,
+        budget: AcquisitionBudget | None,
     ) -> ResolvedPaper:
         max_retries = self._settings.max_retries
         timeout = self._settings.timeout_seconds
@@ -408,12 +417,26 @@ class OpenAlexPaperAdapter:
 
         for attempt in range(max_retries + 1):
             try:
-                async with asyncio.timeout(timeout):
-                    resp = await client.get(
-                        url, headers=headers, timeout=timeout, follow_redirects=True
+                attempt_timeout = min(timeout, budget.remaining_seconds()) if budget else timeout
+                async with asyncio.timeout(attempt_timeout):
+                    request = client.build_request(
+                        "GET", url, headers=headers, timeout=attempt_timeout
                     )
+                    redirects = 0
+                    while True:
+                        if budget:
+                            budget.consume_request()
+                        resp = await client.send(request, follow_redirects=False)
+                        if resp.next_request is None:
+                            break
+                        redirects += 1
+                        if redirects > 20:
+                            raise httpx.TooManyRedirects("redirect limit exceeded", request=request)
+                        request = resp.next_request
             except (httpx.TimeoutException, TimeoutError) as exc:
                 last_exc = exc
+                if budget:
+                    budget.remaining_seconds()
                 if attempt == max_retries:
                     if max_retries == 0:
                         raise ProviderTimeoutError(f"timeout for {url}") from exc
@@ -423,7 +446,7 @@ class OpenAlexPaperAdapter:
                     ) from exc
                 # Backoff but bounded; allow cancellation during sleep.
                 try:
-                    await asyncio.sleep(min(0.2 * (2**attempt), 2.0))
+                    await self._wait(min(0.2 * (2**attempt), 2.0), budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -437,7 +460,7 @@ class OpenAlexPaperAdapter:
                         attempts=max_retries + 1,
                     ) from exc
                 try:
-                    await asyncio.sleep(min(0.2 * (2**attempt), 2.0))
+                    await self._wait(min(0.2 * (2**attempt), 2.0), budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -467,7 +490,7 @@ class OpenAlexPaperAdapter:
                     raise ProviderRateLimitedError("Retry-After exceeds the 2 second wait limit")
                 delay = max(delay, 0.0)
                 try:
-                    await asyncio.sleep(delay)
+                    await self._wait(delay, budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -479,7 +502,7 @@ class OpenAlexPaperAdapter:
                         attempts=max_retries + 1,
                     ) from last_exc
                 try:
-                    await asyncio.sleep(min(0.2 * (2**attempt), 2.0))
+                    await self._wait(min(0.2 * (2**attempt), 2.0), budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -512,3 +535,8 @@ class OpenAlexPaperAdapter:
         raise ProviderRetryExhaustedError(
             f"exhausted retries for {url}", attempts=max_retries + 1
         ) from last_exc
+
+    async def _wait(self, delay: float, budget: AcquisitionBudget | None) -> None:
+        if budget:
+            budget.check_wait(delay)
+        await asyncio.sleep(delay)
