@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project Context (private)
+PROJECT_CONTEXT.md
+.env.*
+!.env.example
