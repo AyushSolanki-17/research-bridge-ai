@@ -3,11 +3,11 @@
 from fastapi import FastAPI
 
 from research_bridge import __version__
-from research_bridge.system.interfaces.api import router as system_router
+from research_bridge.api.health import router as health_router
 
 
 def create_app() -> FastAPI:
-    """Assemble an independent application instance with capability-owned routes."""
+    """Assemble an independent application instance with API-owned routes."""
     app = FastAPI(title="Research Bridge API", version=__version__)
-    app.include_router(system_router)
+    app.include_router(health_router)
     return app

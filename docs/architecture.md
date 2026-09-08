@@ -10,8 +10,7 @@ src/research_bridge/
   knowledge_graph/
   provenance/
   ingestion/openalex/
-  system/interfaces/           process health endpoint
-  api/                         FastAPI application assembly and server entrypoint
+  api/                         all FastAPI code: app, routes, HTTP schemas and server
   cli.py                       command-line entrypoint
 tests/                         mirrors source capabilities and cross-capability journeys
 migrations/                    ordered schema changes with capability ownership
@@ -30,7 +29,7 @@ docs/                          product, architecture and decisions
 
 ## Capability convention
 
-Every substantial capability uses the same four boundaries within its source module:
+Business capabilities use these boundaries only where needed; HTTP transport lives separately in `api/`:
 
 ```text
 <capability>/
@@ -38,22 +37,23 @@ Every substantial capability uses the same four boundaries within its source mod
   domain/                      entities, value objects, invariants, domain errors
   application/                 use cases, commands/queries, DTOs and required ports
   infrastructure/              persistence, providers and implementations of ports
-  interfaces/                  HTTP/CLI/job handlers and transport schemas
+  interfaces/                  optional non-HTTP handlers, independent of FastAPI
 ```
 
 A directory or file exists only when its responsibility is needed. Small capabilities can begin with `domain/entities.py` or one use case. Do not create boilerplate services, repositories, factories or validators just to match a template. A repository abstraction belongs beside its consuming use case in `application/`; an implementation belongs in `infrastructure/`. Place a port in domain only when a domain operation itself requires that abstraction.
 
-Application `schemas.py` means framework-independent command/result DTOs. HTTP request/response schemas belong to `interfaces/api/`. Domain errors express invariants; application errors express use-case failures; interfaces translate them into transport errors. `service.py` is optional and should represent a named use case or cohesive behavior, not an all-purpose manager.
+Application `schemas.py` means framework-independent command/result DTOs. HTTP request/response schemas, routers, dependencies, middleware and server setup belong exclusively to `src/research_bridge/api/`. Domain errors express invariants; application errors express use-case failures; API handlers translate them into HTTP errors; other interfaces translate them for their own transport. `service.py` is optional and should represent a named use case or cohesive behavior, not an all-purpose manager.
 
 ## Dependency direction
 
 ```text
 interfaces     → application → domain
 infrastructure → application ports + domain
-api / cli      → interfaces + infrastructure + application
+api routes     → application contracts
+api app / cli  → infrastructure + application
 ```
 
-Domain does not import application, infrastructure, interfaces, FastAPI, ORM or provider SDK types. Application does not import infrastructure or interfaces. Interfaces call use cases and receive dependencies; they do not construct concrete adapters. Only API and CLI entrypoints assemble concrete dependencies and register routes and CLI commands. They contain no business rules.
+Domain does not import application, infrastructure, interfaces, FastAPI, ORM or provider SDK types. Application does not import infrastructure or interfaces. Interfaces call use cases and receive dependencies; they do not construct concrete adapters. API assembly and CLI entrypoints construct concrete dependencies without business rules. API routers receive dependencies and call supported application contracts. All package code outside `api/` is independent of FastAPI, Starlette, Uvicorn and `research_bridge.api`.
 
 Across capabilities, import supported application exports or stable domain value types; never another capability's infrastructure, interface internals or tables. An `__init__.py` exports only deliberately supported symbols when implementation exists. Prevent circular dependencies with consumer-owned ports and entrypoint-wired adapters. Adapters may call another capability's supported application contract without making the consumer's application layer import its implementation. Use direct calls before introducing messaging.
 

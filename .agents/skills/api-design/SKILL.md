@@ -5,7 +5,7 @@ description: Design or change FastAPI endpoints and versioned API contracts.
 
 # FastAPI API Design
 
-Treat FastAPI as an outer transport adapter.
+Treat FastAPI as an outer transport adapter. Keep all FastAPI implementation under `src/research_bridge/api/`, including routers, HTTP schemas, dependency functions, middleware, app assembly and server startup. Business packages must not import this package or the web framework.
 
 ## Endpoint workflow
 
@@ -72,7 +72,7 @@ For mutable operations determine whether retry/idempotency protection is necessa
 
 Avoid breaking response contracts without explicit intent.
 
-Keep HTTP-specific schemas in the capability’s `interfaces/api/`.
+Keep HTTP-specific schemas and handlers in `src/research_bridge/api/`; group by capability inside this folder when needed. Call the business capability’s supported application contracts.
 
 If a data structure must become a reusable programmatic contract, define an appropriate application-level DTO deliberately rather than importing API schemas into business modules.
 

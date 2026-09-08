@@ -10,7 +10,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits and ownership/r
 
 ## Ownership and boundaries
 
-Use `src/<namespace>/` business capability modules with `domain/`, `application/`, `infrastructure/`, and `interfaces/` as needed. Capability interfaces own transport; `api/` and `cli.py` assemble entrypoints and dependencies. Reserve `packages/` for independently reusable libraries.
+Use `src/<namespace>/` business capability modules with `domain/`, `application/`, `infrastructure/`, and `interfaces/` as needed. All FastAPI code belongs in `src/research_bridge/api/`: app assembly, routers, HTTP schemas, dependencies, middleware and server startup. Business capabilities outside `api/` must not import the API package, FastAPI, Starlette or Uvicorn. API routes call framework-independent application contracts; `cli.py` provides the separate command-line entrypoint. Reserve `packages/` for independently reusable libraries.
 
 Follow the explicit dependency rules in the architecture document. Avoid generic shared buckets, circular imports, speculative services and unused abstractions. Keep consistent boundaries with flexible internals: do not require every layer or template file in a small capability. Add dependencies and modules only with a concrete capability. Preserve provenance, typed relationships, source attribution and explicit inference status.
 

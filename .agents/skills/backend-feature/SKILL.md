@@ -29,7 +29,7 @@ Prefer:
 - domain invariant → the owning capability’s `domain/`
 - reusable use case → the owning capability’s `application/`
 - external integration → the owning capability’s `infrastructure/`
-- HTTP behavior → the capability’s `interfaces/api/`
+- HTTP behavior → `src/research_bridge/api/`, calling the capability’s application contract
 - background execution → the capability’s `interfaces/worker/`
 
 Never default business behavior to the API application merely because the feature begins with an HTTP endpoint.
@@ -94,7 +94,7 @@ Add the smallest sufficient combination of:
 
 Verify:
 
-- no FastAPI dependency leaked into domain or application modules
+- no API-package, FastAPI, Starlette or Uvicorn dependency leaked into package code outside `api/`
 - no ORM/provider object leaked inward
 - public APIs changed intentionally
 - errors are mapped correctly
@@ -118,7 +118,7 @@ Do not propose unrelated refactors unless they are required for correctness.
 
 ## Source placement
 
-Use the owning capability under `src/`; put HTTP/CLI/job schemas and handlers in its interfaces layer. Keep concrete dependency wiring in API and CLI entrypoints. Mirror capability ownership in root `tests/`; coordinate schema changes in root `migrations/`. A feature does not need its own manifest or distribution.
+Use the owning capability under `src/` for business logic. Keep all FastAPI code and HTTP schemas/handlers in `src/research_bridge/api/`. Non-HTTP handlers may use capability interfaces. Keep concrete dependency wiring in API and CLI entrypoints. Mirror capability ownership in root `tests/`; coordinate schema changes in root `migrations/`. A feature does not need its own manifest or distribution.
 
 
 ## Ownership and reuse

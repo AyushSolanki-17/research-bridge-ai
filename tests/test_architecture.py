@@ -9,12 +9,14 @@ NAMESPACE = "research_bridge"
 
 
 def test_inward_layer_dependencies() -> None:
+    """Reject outward business imports and web dependencies outside the API package."""
     violations = []
     for path in (SOURCE / NAMESPACE).rglob("*.py"):
         parts = path.relative_to(SOURCE).with_suffix("").parts
         module = ".".join(parts)
         package = module if path.name == "__init__.py" else module.rpartition(".")[0]
         source_layers = set(parts) & {"domain", "application", "interfaces", "infrastructure"}
+        is_api = parts[:2] == (NAMESPACE, "api")
         for node in ast.walk(ast.parse(path.read_text())):
             targets = []
             if isinstance(node, ast.Import):
@@ -27,6 +29,8 @@ def test_inward_layer_dependencies() -> None:
             for target in targets:
                 imported = set(target.split("."))
                 forbidden = set()
+                if not is_api:
+                    forbidden |= {"fastapi", "starlette", "uvicorn"}
                 if "domain" in source_layers:
                     forbidden |= {
                         "application",
@@ -45,6 +49,11 @@ def test_inward_layer_dependencies() -> None:
                     target == entrypoint or target.startswith(f"{entrypoint}.")
                     for entrypoint in (f"{NAMESPACE}.api", f"{NAMESPACE}.cli")
                 )
-                if forbidden & imported or (source_layers and entrypoint_import):
+                api_import = target == f"{NAMESPACE}.api" or target.startswith(f"{NAMESPACE}.api.")
+                if (
+                    forbidden & imported
+                    or (source_layers and entrypoint_import)
+                    or (not is_api and api_import)
+                ):
                     violations.append(f"{path.relative_to(SOURCE)}:{node.lineno} imports {target}")
     assert not violations, "\n".join(violations)

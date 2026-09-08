@@ -8,7 +8,7 @@ Business ownership, repository layout and independently reusable distributions a
 
 ## Decision
 
-Keep the application's source under `src/`. Group by business capability and use `domain/`, `application/`, `infrastructure/`, and `interfaces/` inside substantial capabilities. Keep internals flexible and add files only when behavior needs them. Root composition wires dependencies; the capability owns its handlers and transport schemas.
+Keep the application's source under `src/`. Group by business capability and use `domain/`, `application/`, `infrastructure/`, and `interfaces/` inside substantial capabilities. Keep internals flexible and add files only when behavior needs them. The `api/` package owns all FastAPI routes, HTTP schemas, dependencies and server setup. Business capabilities expose framework-independent application contracts that API routes call. Optional capability interfaces are for non-HTTP entrypoints only.
 
 Reserve `packages/` for demonstrated standalone library extraction. Follow [architecture](../architecture.md) for repository-specific source paths and dependency rules.
 

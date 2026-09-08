@@ -16,12 +16,13 @@ Confirm:
 ```
 capability.interfaces → capability.application → capability.domain
 capability.infrastructure → capability.application ports + capability.domain
-API and CLI entrypoints → capability.interfaces + capability.infrastructure + capability.application
+api routers → capability.application
+API assembly and CLI entrypoints → capability.infrastructure + capability.application
 ```
 
 and infrastructure implements inward-facing contracts.
 
-Flag inverted dependencies.
+Flag inverted dependencies. All FastAPI code, HTTP schemas, routers, middleware and server setup belong under `src/research_bridge/api/`. Package code outside that directory must not import the API package, FastAPI, Starlette or Uvicorn.
 
 ### Reusability
 
