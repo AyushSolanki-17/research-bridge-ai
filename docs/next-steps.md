@@ -1,22 +1,148 @@
-# Next implementation: citation explorer
+# Citation Explorer tasks
 
-Read AGENTS.md, product.md, architecture.md and coding-style.md before changing code. The existing runtime provides health, CLI version/help, packaging and checks; no research behavior is implemented. Implement this milestone in small working increments and keep this status accurate.
+Status: research behavior is not implemented. Process health, CLI help/version, runtime configuration and build/check tooling already exist. We are building the research functionality from scratch, reusing that setup.
 
-## Outcome
+Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-A caller can search by title and explicitly select a candidate, or resolve a paper by DOI/OpenAlex work identifier, explore bounded incoming and outgoing citation neighborhoods at 1–3 hops, inspect paper metadata, filter results and inspect the source attribution behind every returned citation. “Attention Is All You Need” is the motivating demo, with no hardcoded lineage. Start with identifier resolution and outgoing citations as the first slice; these alone do not complete the milestone.
+Implement these tasks in order; each depends on the preceding task's verified output. All are unassigned and not started; the first is ready to claim. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
-## Implementation order
+The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
-1. In research/papers, define canonical paper identifiers and metadata with explicit missing values. In provenance, define source attribution including provider record identity and observation time. Normalize equivalent identifiers and validate inputs. Preserve title, authors, publication date, venue, abstract when available, identifiers, citation counts and available topic metadata; missing data stays explicit.
-2. In ingestion/openalex, add a provider adapter behind a narrow application-owned port. Verify current official OpenAlex access requirements before live integration; keep any credentials in environment configuration. Translate provider payloads, reconstruct metadata only when supported, handle missing works, rate limits and upstream failures with bounded retries/timeouts. Add paginated title candidate search and incoming-citation lookup as separate supported operations; do not infer reverse citations from an outgoing-only sample.
-3. In knowledge_graph, represent directed cites edges (citing work → referenced work), deduplicate nodes/edges and implement deterministic traversal with depth, node, edge, request and time budgets. Handle cycles, unresolved targets, cancellation and partial results; return the reason exploration stopped. Support incoming, outgoing and combined traversal without reversing the stored cites edge. Start with an in-memory adapter; add durable storage only when required.
-4. Expose the same use cases through HTTP handlers in `api/` and separate CLI handlers, wired in API and CLI entrypoints. Choose and document explicit safe defaults and hard maximum budgets. Return stable identifiers, edge direction, source attribution and completion status. Map invalid input, not found and provider failures consistently.
-5. Add year, author, venue, citation-count and topic filters where source metadata supports them. Specify missing-value handling and whether filtering affects returned results or traversal expansion; do not silently imply corpus-wide coverage from a bounded neighborhood. Keep the UI able to inspect a selected paper and its source records.
-6. Export the backend-owned OpenAPI snapshot and document runnable examples. Keep library imports independent of the optional web stack.
+1. **Ingest a paper by identifier**
 
-## Acceptance
+   **Owner:** `research/papers`, `provenance`, `ingestion/openalex`.
 
-Offline tests cover DOI/identifier normalization, ambiguous title candidates and explicit selection, incoming/outgoing edge direction, 1–3 hop traversal, duplicate records, cycles, exact budget boundaries, filters and missing values, missing metadata/references, provider pagination/timeout/rate-limit behavior and evidence traceability. API and CLI exercise the same use case with a deterministic fake provider. Results must distinguish complete, truncated and failed exploration. A live smoke test is optional and reported separately.
+   **After this task:** Given a DOI or OpenAlex work identifier, the library can fetch a paper and return normalized metadata with its source and observation time. Model only the values needed for this working ingestion slice.
 
-Run the lint, format, type, pytest, OpenAPI drift and build checks in README.md. Explain ownership, meaningful design choices and remaining limitations. Do not publish packages or deploy as part of implementation unless requested.
+   **Deliverable:** framework-independent identifiers, paper metadata and attribution values with one canonical owner each. Create only the modules needed for these behaviors.
+
+   **Acceptance criteria**
+
+   - Equivalent supported DOI forms and OpenAlex work identifier forms normalize consistently; malformed identifiers fail with specific errors. Document accepted forms.
+   - Paper records preserve title, authors, publication date, venue, abstract when available, identifiers, citation counts and available topic metadata. Unknown values remain explicit rather than invented or converted to zero.
+   - Attribution preserves provider name, provider record identity, an inspectable source reference and observation time. Evidence identifiers remain stable when records pass between ingestion, graph results and transports; document their identity semantics.
+   - Provider payloads and framework types do not become canonical models. Reported citation facts are distinguishable from inference; unknown confidence is not zero.
+
+   **Verification:** offline tests for equivalent/invalid identifiers, incomplete metadata, valid zero citation counts, attribution identity and serialization round trips where serialization is implemented.
+
+   **Deliverable:** resolve an arbitrary supported identifier to a canonical paper with attribution using an injected provider boundary. Acquisition and payload translation belong to `ingestion/openalex`; canonical identity rules remain in `research/papers`.
+
+   **Acceptance criteria**
+
+   - Record current official OpenAlex access requirements, relevant data terms and the date checked before live integration. Configure any credentials through environment settings and keep them out of logs, fixtures and source.
+   - Resolve DOI and OpenAlex inputs without paper-specific branches. A missing work is distinguishable from malformed input and upstream failure.
+   - Translate supported metadata faithfully, including abstract reconstruction only when the payload supports it. Missing or malformed optional metadata has a documented outcome.
+   - Apply explicit network timeouts and finite retry/request limits. Handle rate limits and transient failures without unbounded waiting; cancellation stops further acquisition.
+   - Provider-specific types stay in infrastructure behind a narrow application-owned port. The normal test suite needs no credentials or network.
+
+   **Verification:** deterministic adapter fixtures for successful resolution, missing work, sparse/malformed metadata, rate limiting, timeout, exhausted retries and cancellation. Include at least two distinct seeds to guard against demo-specific behavior.
+
+2. **Explore outgoing citations within limits**
+
+   **Owner:** `knowledge_graph`.
+
+   **After this task:** Given an ingested seed, the library can return the papers it cites across 1–3 hops, with directed edges, evidence and explicit limits or missing references.
+
+   **Deliverable:** an in-memory outgoing citation neighborhood use case with source-attributed directed edges.
+
+   **Acceptance criteria**
+
+   - An edge always means citing paper → referenced paper. Every returned edge has evidence identifying the provider record and reference assertion that supports it.
+   - Support depths 1, 2 and 3, with documented depth semantics, traversal order and deterministic tie-breaking for the same provider responses. Deduplicate nodes and edges and terminate on cycles.
+   - Choose and document numeric defaults and hard maxima for depth, nodes, edges, provider requests and elapsed time before exposing exploration. Define whether the seed, pagination and retries consume each budget.
+   - Enforce budgets across the whole operation, including retries and individual network waits. Tests use controlled time; deterministic budget behavior must not depend on wall-clock sleeps.
+   - Distinguish complete, truncated and failed results, with machine-readable stop reasons. Complete means exhausted within the requested scope, not exhaustive coverage of the scholarly corpus.
+   - Report unresolved references and incomplete metadata explicitly. Define partial-result behavior for provider failures and cancellation; never label incomplete acquisition as complete.
+
+   **Verification:** synthetic graph tests for each hop depth, edge direction, duplicate records, cycles, unresolved targets, empty neighborhoods and exact boundaries of every budget. Assert both returned evidence and stop status.
+
+3. **Expose resolution and exploration through HTTP and CLI**
+
+   **Owner:** `api`, capability application contracts, `cli.py`.
+
+   **After this task:** A caller can resolve an identifier, request an outgoing graph and inspect its evidence from a terminal or HTTP client, using the same library behavior.
+
+   **Deliverable:** identifier resolution and outgoing exploration available through supported application exports, HTTP handlers in `api/` and CLI commands. API and CLI entrypoints wire concrete dependencies.
+
+   **Acceptance criteria**
+
+   - Library, HTTP and CLI invoke the same application behavior for resolution and exploration; transports do not duplicate normalization, traversal or attribution rules.
+   - Requests expose documented defaults and bounded overrides. Invalid inputs and budgets, missing seeds and provider failures map to documented HTTP responses and CLI exit behavior.
+   - Results expose canonical identifiers, metadata, citation direction, evidence, applied limits and completion/stop status. A caller can inspect the supporting source record for a returned edge.
+   - Update the backend-owned OpenAPI snapshot with the implemented routes and schemas. Add runnable README examples for the actual CLI and HTTP syntax.
+   - The library and CLI remain usable without the optional web stack; imports do not start a server or access the provider.
+
+   **Verification:** library/API/CLI journeys against the same deterministic fake provider, including one success, one truncation and relevant error cases. Run schema drift and package build checks alongside the applicable README checks.
+
+4. **Search by title and select a paper**
+
+   **Owner:** `research/papers`, `ingestion/openalex`.
+
+   **After this task:** A caller can enter a title, review paginated candidates, explicitly choose the intended paper and explore it.
+
+   **Deliverable:** bounded, paginated title candidate search and explicit selection through the library, HTTP and CLI.
+
+   **Acceptance criteria**
+
+   - Search returns candidates with stable identifiers and enough available metadata to distinguish works, including title, authors, date and venue. It never silently selects a paper on the caller's behalf.
+   - A caller can select a returned identifier and run the existing exploration use case. Empty queries, no matches and invalid selection inputs have documented outcomes.
+   - Pagination exposes documented continuation/end semantics and respects result, request and time limits; repeated pages do not cause an infinite loop or duplicate candidate records.
+   - Preserve attribution for each candidate. Update contracts and runnable examples with the new behavior.
+
+   **Verification:** offline tests for ambiguous titles, explicit selection, no matches, multiple pages, duplicate candidates and search limit exhaustion. API and CLI demonstrate search → select → explore without hardcoding the demo title.
+
+5. **Explore incoming and combined citations**
+
+   **Owner:** `knowledge_graph`, `ingestion/openalex`.
+
+   **After this task:** A caller can explore papers citing the seed, papers the seed cites, or both, while retaining correct citation direction and shared limits.
+
+   **Deliverable:** provider-backed incoming citation lookup and `incoming`, `outgoing` and `both` exploration modes across the supported 1–3 hops.
+
+   **Acceptance criteria**
+
+   - Incoming lookup acquires citing works using the provider's supported operation and pagination. It does not infer incoming completeness from an outgoing-only sample.
+   - Stored and returned edge direction remains citing → referenced regardless of traversal mode. Each incoming edge preserves the source assertion used to establish it.
+   - All modes reuse deduplication, evidence and completion semantics. Combined traversal shares one operation budget across both directions, all pages and retries.
+   - Document how directions share the budget and how traversal order affects bounded coverage. Surface unread pages, unresolved references and exhausted budgets as incomplete exploration.
+   - Library, HTTP, CLI and the exported schema expose the same modes and status semantics.
+
+   **Verification:** asymmetric synthetic graphs that catch reversed edges or falsely inferred incoming links; all three modes at depths 1–3; paginated incoming results; cycles and combined-budget exhaustion. Verify an upstream failure after a successful page preserves truthful partial-result status.
+
+6. **Filter results and inspect evidence**
+
+   **Owner:** `knowledge_graph`, `research/papers`, `provenance`.
+
+   **After this task:** A caller can narrow the neighborhood by available metadata and inspect each returned paper and the source supporting each citation.
+
+   **Deliverable:** year, author, venue, citation-count and topic filters, plus paper and source inspection for returned results.
+
+   **Acceptance criteria**
+
+   - Document filter input forms, range boundaries, combination rules and missing-value behavior. Use available provider metadata; missing topics or venues are not inferred.
+   - Choose and document whether filters affect traversal expansion or only returned results. Report applied filters and bounded scope so users cannot mistake the result for a corpus-wide query.
+   - Define seed retention and endpoint handling for filtered edges. Returned edges reference inspectable endpoints; filtering never creates misleading or unsupported citation relationships.
+   - A selected returned paper exposes its available metadata and attribution. Every returned citation exposes its evidence identifier, provider record/source reference and observation time without requiring access to raw internal objects.
+   - Carry the same filters and inspection data through library, HTTP and CLI, with matching OpenAPI and example updates.
+
+   **Verification:** offline tests for each filter, combinations, boundary values, missing metadata and filter/traversal interaction. Journey assertions follow returned paper and edge evidence back to the supporting fixture records.
+
+7. **Verify the complete journey and installable package**
+
+   **Owner:** API/CLI entrypoints and capability owners.
+
+   **After this task:** A developer can install the built package and reproduce the documented complete journey, with offline checks proving behavior and limitations clearly recorded.
+
+   **Deliverable:** a verified citation exploration backend with accurate usage documentation and recorded completion evidence.
+
+   **Acceptance criteria**
+
+   - Demonstrate title search → candidate selection → 1–3 hop incoming/outgoing/combined graph → filtered paper inspection → citation evidence through offline journeys. Include identifier entry as an alternative path and a seed other than the motivating demo.
+   - Verify complete, truncated and failed outcomes, ambiguous seeds, unresolved references, pagination and exhausted budgets. Do not use live-provider availability as the normal test gate.
+   - Export and check the final OpenAPI snapshot. Build the root wheel/sdist and verify a clean installation and documented application imports without FastAPI or unrelated optional dependencies.
+   - Update README, product/architecture status and this tracker to reflect implemented behavior and remaining limitations. Record actual test commands/results; a live smoke test is optional and reported separately.
+   - Review the full task diff for ownership, duplicated rules, unnecessary abstractions, unsupported completeness claims and content outside this repository's documented scope. Review generated schema and package contents as well as source.
+
+   **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
+
+Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; title search, incoming exploration and filters are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.

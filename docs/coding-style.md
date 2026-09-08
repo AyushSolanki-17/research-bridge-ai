@@ -17,3 +17,13 @@ Domain/application types must not depend on FastAPI, ORM or provider SDK objects
 Test observable behavior: domain invariants, use cases with fakes, adapter contracts with deterministic fixtures and important API/CLI journeys. Keep normal tests offline. Run README checks appropriate to changes; do not add tests solely to assert scaffold structure.
 
 Follow the implementation discipline in AGENTS.md: task-linked changes, small verified slices, evidence-led debugging and a clear stopping condition. Design patterns are tools, not acceptance criteria.
+
+## Docstrings and comments
+
+Follow the mandatory [naming and documentation requirements](../AGENTS.md#naming-and-documentation-requirements). Apply the following documentation rules to new and changed handwritten code, including scripts and tests. Keep comments accurate when behavior changes; do not add empty sections or boilerplate that merely repeats names. Existing formatter, type-checker and line-length settings remain authoritative for code formatting.
+
+For Python, follow the [Google Python comments and docstrings guide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings). Use triple double quotes, a concise summary, and a blank line before further detail. Document modules, public classes and public functions/methods; explain non-obvious internal behavior. Include `Args:`, `Returns:` or `Yields:`, `Raises:` and class `Attributes:` sections when applicable. Describe observable behavior, meaningful constraints, side effects and expected errors without duplicating type annotations. Small, self-explanatory private helpers do not need redundant docstrings.
+
+For any TypeScript/JavaScript added here, use [Google-style JSDoc](https://google.github.io/styleguide/tsguide.html#comments-documentation), with no duplicate TypeScript type annotations.
+
+Comments must follow Google's clarity and grammar conventions: explain why, invariants or a surprising tradeoff; use clear sentences and avoid restating the code. Keep implementation details out of API documentation unless they affect callers. TODOs must describe concrete work and a traceable issue or owner, without roadmap labels. Review docstrings and comments for correctness, language-appropriate format and naming compliance before marking work complete.

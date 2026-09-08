@@ -8,6 +8,14 @@ Read [next steps](docs/next-steps.md), [coding style](docs/coding-style.md), [pr
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits and ownership/reuse review. Follow the same policy when writing commits as an agent. Repository instructions, skills and tooling are owned and edited in this clone; no external template synchronization is required.
 
+## Naming and documentation requirements
+
+Name work by its concrete capability or behavior. Never include roadmap phase numbers, phase labels, milestone/stage labels or encoded planning identifiers in commit messages (including bodies and footers), branch names, PR titles/bodies, code comments, docstrings, classes, functions, variables, files, directories, tests, fixtures, schemas, configuration, documentation or generated artifacts. Do not replace a phase label with a task/step number in those names. Plain numbered task lists are allowed for ordering work; refer to tasks by their descriptive names outside that list. Technical versions and genuine domain terminology are not roadmap labels.
+
+Use names such as `feat/identifier-resolution`, `resolve_paper` and `fix(papers): normalize DOI identifiers`. Before completing work, inspect changed content and proposed branch/commit/PR metadata for violations and correct them. Do not rewrite existing Git history unless explicitly requested.
+
+Google-style documentation is mandatory for new or changed handwritten code: Python uses Google docstrings; TypeScript/JavaScript uses Google's JSDoc conventions. Follow [coding style](docs/coding-style.md) for language-specific requirements. Comments explain intent, constraints and non-obvious decisions, not planning history or a narration of obvious code. Documentation and naming review is a completion requirement; existing automated checks do not prove compliance.
+
 ## Ownership and boundaries
 
 Use `src/<namespace>/` business capability modules with `domain/`, `application/`, `infrastructure/`, and `interfaces/` as needed. All FastAPI code belongs in `src/research_bridge/api/`: app assembly, routers, HTTP schemas, dependencies, middleware and server startup. Business capabilities outside `api/` must not import the API package, FastAPI, Starlette or Uvicorn. API routes call framework-independent application contracts; `cli.py` provides the separate command-line entrypoint. Reserve `packages/` for independently reusable libraries.
@@ -31,7 +39,7 @@ Load only the workflow relevant to the task:
 
 Use the simplest implementation that satisfies the current acceptance criteria. OOP, SOLID and design patterns guide decisions; they are not a quota of classes, interfaces or layers. Plain functions, direct calls and existing framework features are appropriate when sufficient.
 
-Do not build for hypothetical future consumers, scale or roadmap phases. Add a dependency, abstraction, service, queue, cache, database or package only when the current task demonstrates a need that existing code cannot reasonably meet. Keep the justification brief and concrete.
+Do not build for hypothetical future consumers, scale or unapproved capabilities. Add a dependency, abstraction, service, queue, cache, database or package only when the current task demonstrates a need that existing code cannot reasonably meet. Keep the justification brief and concrete.
 
 Architecture documents describe ownership and dependency boundaries, not a checklist of directories to create. Create layers only when implemented behavior needs them. Do not proactively restructure working code, remove scaffolds, expand tooling or perform architectural cleanup unless requested or necessary for the requested behavior. Keep unrelated observations in the final report.
 

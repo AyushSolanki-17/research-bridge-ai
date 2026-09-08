@@ -56,6 +56,7 @@ The image uses the frozen uv lockfile and runs under an unprivileged user. `/hea
 
 ## Project guide
 
+- [Citation Explorer tasks and acceptance criteria](docs/next-steps.md)
 - [Product context](docs/product.md)
 - [Architecture](docs/architecture.md)
 - [Agent instructions](AGENTS.md)

@@ -1,7 +1,37 @@
 # provenance
 
-Evidence records, source attribution and confidence semantics. Evidence references remain stable across ingestion, graph queries and answers.
+Evidence records, source attribution and confidence semantics. Evidence
+references remain stable across ingestion, graph queries and answers.
 
-Use `domain/`, `application/`, `infrastructure/` and `interfaces/` when those responsibilities exist. Keep internals flexible; add Python modules and exports with behavior. This is a source module scaffold, not a standalone distribution.
+## Evidence identity
+
+Evidence identity is stable and does not include observation time.
+Observation time is recorded but never changes the stable identifier.
+
+- Paper record: ``openalex:work:<work-id>`` where ``<work-id>`` is the
+  normalized OpenAlex work ID (e.g., ``W2741809807``).
+- Citation assertion: ``openalex:citation:<citing-id>:<referenced-id>``
+  (reserved for citation graph).
+
+Two observations of the same work at different ``observed_at`` times share
+the same ``id``. Serialized form via ``Evidence.to_dict()`` round-trips
+without identity loss; ``id``, ``provider``, ``provider_record_id`` and
+``source_url`` remain constant while ``observed_at`` may differ.
+
+## Attribution
+
+Each ``Evidence`` preserves:
+
+- ``provider`` (e.g., ``openalex``),
+- ``provider_record_id`` (normalized work ID),
+- ``source_url`` (inspectable ``https://openalex.org/<work-id>``),
+- ``observed_at`` (timezone-aware UTC timestamp),
+- ``inference_status`` (``REPORTED`` for the paper record; topics carry
+  ``INFERRED_PROVIDER`` with their supplied score).
+
+Use `domain/`, `application/`, `infrastructure/` and `interfaces/` when
+those responsibilities exist. Keep internals flexible; add Python modules
+and exports with behavior. This is a source module scaffold, not a
+standalone distribution.
 
 Follow [architecture](../../../docs/architecture.md).
