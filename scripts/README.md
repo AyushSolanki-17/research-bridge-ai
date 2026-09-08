@@ -1,3 +1,5 @@
-# Repository tooling
+# Scripts
 
-Add schema export, package build and maintenance tools here when executable code needs them. Commands operate within this repository root and must not copy parent workspace content.
+`export_openapi.py` exports the FastAPI schema to `contracts/openapi.json`; `--check` detects drift in CI. See the [contract commands](../contracts/README.md).
+
+Use standard tools directly for linting, formatting, types, tests and builds. Add a script only for a concrete repeated task that those tools do not cover.

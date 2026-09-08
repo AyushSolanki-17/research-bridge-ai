@@ -15,8 +15,8 @@ dependencies = []
 server = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1"]
 
 [project.scripts]
-research-bridge-ai-api = "research_bridge.bootstrap.server:main"
-research-bridge = "research_bridge.bootstrap.cli:main"
+research-bridge-ai-api = "research_bridge.api.server:main"
+research-bridge = "research_bridge.cli:main"
 
 [dependency-groups]
 dev = ["httpx>=0.28,<1", "pytest>=8,<10", "ruff>=0.11,<1", "mypy>=1.15,<2"]

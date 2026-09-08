@@ -32,18 +32,19 @@ def test_inward_layer_dependencies() -> None:
                         "application",
                         "infrastructure",
                         "interfaces",
-                        "bootstrap",
                         "fastapi",
                         "pydantic",
                         "sqlalchemy",
                         "uvicorn",
                     }
                 if "application" in source_layers:
-                    forbidden |= {"infrastructure", "interfaces", "bootstrap", "fastapi", "uvicorn"}
+                    forbidden |= {"infrastructure", "interfaces", "fastapi", "uvicorn"}
                 if "interfaces" in source_layers:
-                    forbidden |= {"infrastructure", "bootstrap"}
-                if source_layers and "bootstrap" in imported:
-                    forbidden.add("bootstrap")
-                if forbidden & imported:
+                    forbidden |= {"infrastructure"}
+                entrypoint_import = any(
+                    target == entrypoint or target.startswith(f"{entrypoint}.")
+                    for entrypoint in (f"{NAMESPACE}.api", f"{NAMESPACE}.cli")
+                )
+                if forbidden & imported or (source_layers and entrypoint_import):
                     violations.append(f"{path.relative_to(SOURCE)}:{node.lineno} imports {target}")
     assert not violations, "\n".join(violations)

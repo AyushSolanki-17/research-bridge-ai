@@ -18,7 +18,7 @@ Python 3.13 is selected by `.python-version`; uv can install it automatically. O
 For auto-reload during development:
 
 ```sh
-uv run --extra server uvicorn research_bridge.bootstrap.api:create_app --factory --reload --port 8000
+uv run --extra server uvicorn research_bridge.api.app:create_app --factory --reload --port 8000
 ```
 
 The CLI is independent of the web stack:
@@ -39,10 +39,9 @@ uv run --extra server mypy
 uv run --extra server pytest
 uv run --extra server python scripts/export_openapi.py --check
 uv build
-uv run python scripts/check_distribution.py
 ```
 
-Tests cover API behavior, side-effect-free imports and inward layer dependencies. The artifact check verifies wheel/sdist contents and imports the wheel in a clean environment without FastAPI. Keep only the current version's wheel/sdist in `dist/` when running that check.
+Tests cover API behavior, side-effect-free imports and inward layer dependencies. `uv build` creates the wheel and source distribution.
 
 Export intentional API changes with `uv run --extra server python scripts/export_openapi.py`. CI checks snapshot drift; compatibility with prior published releases must be added when releases exist. The current `0.1.0` is a local development version, not a published release.
 
@@ -63,6 +62,6 @@ The image uses the frozen uv lockfile and runs under an unprivileged user. `/hea
 - [Contract policy](contracts/README.md)
 - [Source layout decision](docs/decisions/0001-capability-modules.md)
 
-## Contribution setup
+## Contributing
 
-After cloning, enable Conventional Commit hooks with `python3 scripts/install_hooks.py` (Python 3.10+). See [CONTRIBUTING.md](CONTRIBUTING.md) for commit format, DRY ownership review, and governance checks. CI validates proposed commits and PR titles even when local hooks are bypassed; branch protection is needed to require that check before merge.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions, ownership review and verification expectations. No hook installation is required.

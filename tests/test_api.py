@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from research_bridge.bootstrap.api import create_app
+from research_bridge.api.app import create_app
 
 
 def test_health_contract() -> None:

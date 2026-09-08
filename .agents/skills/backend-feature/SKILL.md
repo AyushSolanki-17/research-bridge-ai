@@ -75,7 +75,7 @@ required ports
     ↓
 infrastructure adapters
     ↓
-capability interfaces, then bootstrap composition
+capability interfaces, then assembly in API and CLI entrypoints
 ```
 
 Keep the domain independent of infrastructure.
@@ -118,7 +118,7 @@ Do not propose unrelated refactors unless they are required for correctness.
 
 ## Source placement
 
-Use the owning capability under `src/`; put HTTP/CLI/job schemas and handlers in its interfaces layer. Keep concrete dependency wiring in bootstrap. Mirror capability ownership in root `tests/`; coordinate schema changes in root `migrations/`. A feature does not need its own manifest or distribution.
+Use the owning capability under `src/`; put HTTP/CLI/job schemas and handlers in its interfaces layer. Keep concrete dependency wiring in API and CLI entrypoints. Mirror capability ownership in root `tests/`; coordinate schema changes in root `migrations/`. A feature does not need its own manifest or distribution.
 
 
 ## Ownership and reuse

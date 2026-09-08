@@ -16,7 +16,7 @@ Confirm:
 ```
 capability.interfaces → capability.application → capability.domain
 capability.infrastructure → capability.application ports + capability.domain
-bootstrap → capability.interfaces + capability.infrastructure + capability.application
+API and CLI entrypoints → capability.interfaces + capability.infrastructure + capability.application
 ```
 
 and infrastructure implements inward-facing contracts.

@@ -11,13 +11,13 @@ src/research_bridge/
   provenance/
   ingestion/openalex/
   system/interfaces/           process health endpoint
-  bootstrap/                   process assembly and dependency wiring
+  api/                         FastAPI application assembly and server entrypoint
+  cli.py                       command-line entrypoint
 tests/                         mirrors source capabilities and cross-capability journeys
 migrations/                    ordered schema changes with capability ownership
-scripts/                       repo maintenance and contract/build tooling
+scripts/                       OpenAPI contract export
 contracts/                     this backend's API schema policy
 docs/                          product, architecture and decisions
-ops/                           deployment configuration and runbooks
 .agents/skills/                 focused implementation workflows
 ```
 
@@ -50,18 +50,18 @@ Application `schemas.py` means framework-independent command/result DTOs. HTTP r
 ```text
 interfaces     → application → domain
 infrastructure → application ports + domain
-bootstrap      → interfaces + infrastructure + application
+api / cli      → interfaces + infrastructure + application
 ```
 
-Domain does not import application, infrastructure, interfaces, FastAPI, ORM or provider SDK types. Application does not import infrastructure or interfaces. Interfaces call use cases and receive dependencies; they do not construct concrete adapters. Only bootstrap assembles concrete dependencies and registers routes, CLI commands and job handlers. It contains no business rules.
+Domain does not import application, infrastructure, interfaces, FastAPI, ORM or provider SDK types. Application does not import infrastructure or interfaces. Interfaces call use cases and receive dependencies; they do not construct concrete adapters. Only API and CLI entrypoints assemble concrete dependencies and register routes and CLI commands. They contain no business rules.
 
-Across capabilities, import supported application exports or stable domain value types; never another capability's infrastructure, interface internals or tables. An `__init__.py` exports only deliberately supported symbols when implementation exists. Prevent circular dependencies with consumer-owned ports and bootstrap-wired adapters. Adapters may call another capability's supported application contract without making the consumer's application layer import its implementation. Use direct calls before introducing messaging.
+Across capabilities, import supported application exports or stable domain value types; never another capability's infrastructure, interface internals or tables. An `__init__.py` exports only deliberately supported symbols when implementation exists. Prevent circular dependencies with consumer-owned ports and entrypoint-wired adapters. Adapters may call another capability's supported application contract without making the consumer's application layer import its implementation. Use direct calls before introducing messaging.
 
 ## Persistence, tests and runtime
 
 Keep the root `pyproject.toml` and `uv.lock`; no workspace or per-capability distribution is needed. Root `migrations/` owns ordered database migrations, with explicit capability ownership on every change. Capabilities own writes to their data; cross-capability writes go through use cases. Document consistency, backfill resumability, rolling compatibility and recovery. Add Alembic configuration only when relational migrations exist.
 
-Mirror source ownership in `tests/`; separate domain/use-case tests, adapter integrations and API/CLI journeys as needed. The bootstrap implements lint/type checks, static inward-import enforcement, API tests, deterministic schema export and clean-wheel import checks. Static import checks do not resolve runtime imports or prove all cross-capability API rules. Tests must prove behavior and boundaries, not that empty scaffold files exist.
+Mirror source ownership in `tests/`; separate domain/use-case tests, adapter integrations and API/CLI journeys as needed. CI runs lint/type checks, static inward-import enforcement, API tests, deterministic schema export and package/container builds. Static import checks do not resolve runtime imports or prove all cross-capability API rules. Tests must prove behavior and boundaries, not that empty scaffold files exist.
 
 Python, FastAPI, uv and pytest remain the implementation direction. Dependency manifests, lockfiles, Dockerfile and runnable instructions are now present. Database, graph, vector, LLM and queue adapters are selected for demonstrated workloads. Bound graph depth, nodes, edges, results and time; preserve cancellation, source evidence and explicit inference status. Apply external timeouts, bounded retries and operation-scoped idempotency.
 

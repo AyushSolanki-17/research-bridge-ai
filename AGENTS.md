@@ -6,11 +6,11 @@ Read [next steps](docs/next-steps.md), [coding style](docs/coding-style.md), [pr
 
 ## Contribution policy
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for mandatory Conventional Commits, ownership/reuse review and executable DRY checks. Follow the same policy when writing commits as an agent. Repository instructions, skills and tooling are owned and edited in this clone; no external template synchronization is required.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits and ownership/reuse review. Follow the same policy when writing commits as an agent. Repository instructions, skills and tooling are owned and edited in this clone; no external template synchronization is required.
 
 ## Ownership and boundaries
 
-Use `src/<namespace>/` business capability modules with `domain/`, `application/`, `infrastructure/`, and `interfaces/` as needed. Capability interfaces own transport; `bootstrap/` assembles entrypoints and dependencies. Reserve `packages/` for independently reusable libraries.
+Use `src/<namespace>/` business capability modules with `domain/`, `application/`, `infrastructure/`, and `interfaces/` as needed. Capability interfaces own transport; `api/` and `cli.py` assemble entrypoints and dependencies. Reserve `packages/` for independently reusable libraries.
 
 Follow the explicit dependency rules in the architecture document. Avoid generic shared buckets, circular imports, speculative services and unused abstractions. Keep consistent boundaries with flexible internals: do not require every layer or template file in a small capability. Add dependencies and modules only with a concrete capability. Preserve provenance, typed relationships, source attribution and explicit inference status.
 
