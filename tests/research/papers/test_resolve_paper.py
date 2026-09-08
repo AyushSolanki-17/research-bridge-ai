@@ -24,6 +24,7 @@ class FakeProvider:
         self.calls: list[str] = []
 
     async def fetch_paper(self, identifier: Doi | OpenAlexWorkId) -> ResolvedPaper:
+        """Return a fixture and record the call, or raise PaperNotFoundError."""
         self.calls.append(str(identifier))
         key = str(identifier)
         # Allow lookup by normalized value
@@ -47,6 +48,7 @@ def _fake_paper(work_id: str) -> ResolvedPaper:
 
 @pytest.mark.asyncio
 async def test_resolve_by_doi_and_openalex_without_branching() -> None:
+    """Resolve both identifier types through the same injected boundary."""
     fake = FakeProvider(
         {
             "10.1234/example": _fake_paper("W1"),
@@ -63,6 +65,7 @@ async def test_resolve_by_doi_and_openalex_without_branching() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_invalid_identifier_raises() -> None:
+    """Reject malformed input before invoking the provider."""
     fake = FakeProvider()
     use_case = ResolvePaper(provider=fake)  # type: ignore[arg-type]
     with pytest.raises(InvalidIdentifierError):
@@ -72,6 +75,7 @@ async def test_resolve_invalid_identifier_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_missing_work_distinguishable() -> None:
+    """Preserve the missing-work error from the provider."""
     fake = FakeProvider()
     use_case = ResolvePaper(provider=fake)  # type: ignore[arg-type]
     with pytest.raises(PaperNotFoundError):

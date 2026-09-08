@@ -29,9 +29,7 @@ Each ``Evidence`` preserves:
 - ``inference_status`` (``REPORTED`` for the paper record; topics carry
   ``INFERRED_PROVIDER`` with their supplied score).
 
-Use `domain/`, `application/`, `infrastructure/` and `interfaces/` when
-those responsibilities exist. Keep internals flexible; add Python modules
-and exports with behavior. This is a source module scaffold, not a
-standalone distribution.
+`domain/evidence.py` implements immutable evidence and serialization. Citation
+identity helpers do not acquire citations or implement graph exploration.
 
 Follow [architecture](../../../docs/architecture.md).

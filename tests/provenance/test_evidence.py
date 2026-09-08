@@ -6,6 +6,7 @@ from research_bridge.provenance.domain.evidence import Evidence, InferenceStatus
 
 
 def test_paper_evidence_identity_stable_across_observation_time() -> None:
+    """Keep record identity stable across distinct observation times."""
     t1 = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
     t2 = datetime(2026, 9, 8, 0, 0, tzinfo=UTC)
     e1 = Evidence.paper_evidence("W2741809807", observed_at=t1)
@@ -22,11 +23,13 @@ def test_paper_evidence_identity_stable_across_observation_time() -> None:
 
 
 def test_citation_evidence_identity() -> None:
+    """Retain citation direction in the evidence identifier."""
     e = Evidence.citation_evidence("W1", "W2")
     assert e.id == "openalex:citation:W1:W2"
 
 
 def test_evidence_serialization_round_trip() -> None:
+    """Preserve all evidence fields during serialization."""
     ts = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)
     original = Evidence(
         id="openalex:work:W2741809807",
@@ -46,6 +49,7 @@ def test_evidence_serialization_round_trip() -> None:
 
 
 def test_evidence_requires_timezone_aware() -> None:
+    """Reject ambiguous observation timestamps."""
     import pytest
 
     naive = datetime(2026, 1, 1, 12, 0)

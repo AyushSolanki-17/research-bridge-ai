@@ -77,11 +77,11 @@ def _extract_openalex_core(raw: str) -> str | None:
     url_match = _OPENALEX_URL_RE.match(trimmed)
     if url_match:
         core = trimmed[url_match.end() :].strip()
-        core = core.split("#")[0].split("?")[0].split("/")[0].strip()
+        core = core.split("#")[0].split("?")[0].rstrip("/")
         return core
     # Bare form.
-    core = trimmed.split("#")[0].split("?")[0].split("/")[0].strip()
-    if _OPENALEX_BARE_RE.match(core):
+    core = trimmed
+    if _OPENALEX_BARE_RE.fullmatch(core):
         return core
     return None
 
@@ -97,8 +97,9 @@ class Doi:
     value: str
 
     def __post_init__(self) -> None:
-        if not _DOI_CORE_PATTERN.match(self.value):
+        if not _DOI_CORE_PATTERN.fullmatch(self.value):
             raise InvalidIdentifierError(self.value, "malformed DOI core")
+        object.__setattr__(self, "value", self.value.lower())
 
     @classmethod
     def parse(cls, raw: str) -> Doi:
@@ -141,7 +142,7 @@ class OpenAlexWorkId:
     value: str
 
     def __post_init__(self) -> None:
-        if not _OPENALEX_BARE_RE.match(self.value):
+        if not _OPENALEX_BARE_RE.fullmatch(self.value):
             raise InvalidIdentifierError(self.value, "malformed OpenAlex work ID")
         # Enforce canonical uppercase.
         if self.value != self.value.upper():
@@ -164,7 +165,7 @@ class OpenAlexWorkId:
         if core is None:
             raise InvalidIdentifierError(raw, "unsupported OpenAlex work ID form")
         normalized = core.upper()
-        if not _OPENALEX_BARE_RE.match(normalized):
+        if not _OPENALEX_BARE_RE.fullmatch(normalized):
             raise InvalidIdentifierError(raw, "malformed OpenAlex work ID")
         return cls(value=normalized)
 

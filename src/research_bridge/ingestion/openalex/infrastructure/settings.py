@@ -19,8 +19,9 @@ Credentials are read from ``OPENALEX_API_KEY`` and never logged.
 
 from __future__ import annotations
 
+import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,9 +36,20 @@ class OpenAlexSettings:
     """
 
     base_url: str = "https://api.openalex.org"
-    api_key: str | None = None
+    api_key: str | None = field(default=None, repr=False)
     timeout_seconds: float = 10.0
     max_retries: int = 3
+
+    def __post_init__(self) -> None:
+        """Reject settings that defeat finite acquisition limits."""
+        if (
+            isinstance(self.timeout_seconds, bool)
+            or not math.isfinite(self.timeout_seconds)
+            or not 0 < self.timeout_seconds <= 60
+        ):
+            raise ValueError("timeout_seconds must be finite and in (0, 60]")
+        if type(self.max_retries) is not int or not 0 <= self.max_retries <= 5:
+            raise ValueError("max_retries must be an integer in [0, 5]")
 
     @classmethod
     def from_env(cls) -> OpenAlexSettings:
@@ -51,19 +63,16 @@ class OpenAlexSettings:
 
         Returns:
             Populated :class:`OpenAlexSettings`.
+
+        Raises:
+            ValueError: If a configured timeout or retry count is invalid.
         """
         api_key = os.getenv("OPENALEX_API_KEY")
         base_url = os.getenv("OPENALEX_BASE_URL", "https://api.openalex.org")
         timeout_raw = os.getenv("OPENALEX_TIMEOUT", "10.0")
         retries_raw = os.getenv("OPENALEX_MAX_RETRIES", "3")
-        try:
-            timeout = float(timeout_raw)
-        except ValueError:
-            timeout = 10.0
-        try:
-            retries = int(retries_raw)
-        except ValueError:
-            retries = 3
+        timeout = float(timeout_raw)
+        retries = int(retries_raw)
         return cls(
             base_url=base_url.rstrip("/"),
             api_key=api_key,

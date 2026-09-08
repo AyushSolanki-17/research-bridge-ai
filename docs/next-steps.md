@@ -1,16 +1,29 @@
 # Citation Explorer tasks
 
-Status: research behavior is not implemented. Process health, CLI help/version, runtime configuration and build/check tooling already exist. We are building the research functionality from scratch, reusing that setup.
+Status: identifier resolution is implemented in the Python library with canonical metadata and provenance. Process health, CLI help/version, runtime configuration and build/check tooling also exist. Citation exploration and research HTTP/CLI commands remain unimplemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. All are unassigned and not started; the first is ready to claim. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Outgoing citation exploration is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
 1. **Ingest a paper by identifier**
 
    **Owner:** `research/papers`, `provenance`, `ingestion/openalex`.
+
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
+   Offline evidence lives in `tests/research/papers`, `tests/provenance` and
+   `tests/ingestion/openalex`: equivalent/invalid identifiers, two synthetic seeds,
+   metadata translation, evidence round trips, actual redirects, bounded settings,
+   rate limiting and cancellation. Live-provider availability is not a test gate.
+   HTTP/CLI research commands and graph traversal are outside this completed slice.
+   Verification: `uv run ruff check .`, `uv run ruff format --check .`,
+   `uv run --extra server mypy`, `uv run --extra server pytest` (55 passed),
+   `uv run --extra server python scripts/export_openapi.py --check` and `uv build`
+   passed. A clean wheel installation resolved an offline work through the use
+   case and adapter without FastAPI installed. Two dependency deprecation warnings
+   remain; live acquisition and Docker were not tested.
 
    **After this task:** Given a DOI or OpenAlex work identifier, the library can fetch a paper and return normalized metadata with its source and observation time. Model only the values needed for this working ingestion slice.
 

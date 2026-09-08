@@ -9,8 +9,7 @@ from research_bridge.research.papers.domain.identifiers import parse_identifier
 class ResolvePaper:
     """Use case to resolve a single paper.
 
-    Attributes:
-        provider: Injected provider port.
+    The injected provider owns acquisition and returns canonical values.
     """
 
     def __init__(self, provider: PaperProviderPort) -> None:

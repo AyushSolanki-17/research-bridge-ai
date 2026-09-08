@@ -99,6 +99,7 @@ def _sparse_payload() -> dict:
 
 @pytest.mark.asyncio
 async def test_successful_resolution_two_seeds() -> None:
+    """Translate distinct synthetic records with metadata and attribution."""
     complete = _complete_payload("W2741809807")
     second = _second_paper_payload()
 
@@ -141,6 +142,7 @@ async def test_successful_resolution_two_seeds() -> None:
 
 @pytest.mark.asyncio
 async def test_sparse_metadata_preserved_as_none() -> None:
+    """Preserve unknown metadata in a sparse provider record."""
     payload = _sparse_payload()
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -162,6 +164,7 @@ async def test_sparse_metadata_preserved_as_none() -> None:
 
 @pytest.mark.asyncio
 async def test_malformed_payload_raises() -> None:
+    """Reject a response lacking its required work identity."""
     malformed = {"doi": "https://doi.org/10.1234/abc"}  # missing id
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -176,6 +179,7 @@ async def test_malformed_payload_raises() -> None:
 
 
 def test_abstract_reconstruction_variants() -> None:
+    """Reconstruct ordered words and reject malformed indexes."""
     assert reconstruct_abstract({"hello": [0], "world": [1]}) == "hello world"
     assert reconstruct_abstract(None) is None
     assert reconstruct_abstract({}) is None
@@ -188,6 +192,7 @@ def test_abstract_reconstruction_variants() -> None:
 
 @pytest.mark.asyncio
 async def test_zero_vs_missing_citation_counts() -> None:
+    """Distinguish a reported zero from an absent count."""
     zero_payload = {**_complete_payload("W1"), "cited_by_count": 0, "id": "https://openalex.org/W1"}
     missing_payload = {k: v for k, v in _complete_payload("W2").items() if k != "cited_by_count"}
     missing_payload["id"] = "https://openalex.org/W2"
@@ -209,11 +214,13 @@ async def test_zero_vs_missing_citation_counts() -> None:
 
 @pytest.mark.asyncio
 async def test_redirect_uses_canonical_id() -> None:
+    """Follow a real redirect with an injected default client."""
     # Request old id W999, payload returns canonical W111
     canonical = _complete_payload("W111")
 
     def handler(request: httpx.Request) -> httpx.Response:
-        # Simulate redirect by returning canonical payload regardless of requested id
+        if request.url.path == "/works/W999":
+            return httpx.Response(301, headers={"Location": "/works/W111"})
         return httpx.Response(200, json=canonical)
 
     transport = httpx.MockTransport(handler)
@@ -229,6 +236,8 @@ async def test_redirect_uses_canonical_id() -> None:
 
 @pytest.mark.asyncio
 async def test_missing_work_404() -> None:
+    """Translate a missing work into the application error."""
+
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(404, json={"error": "not found"})
 
@@ -242,6 +251,8 @@ async def test_missing_work_404() -> None:
 
 @pytest.mark.asyncio
 async def test_rate_limited() -> None:
+    """Report rate limiting when no retries are configured."""
+
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(429, json={"error": "rate limited"})
 
@@ -255,6 +266,8 @@ async def test_rate_limited() -> None:
 
 @pytest.mark.asyncio
 async def test_timeout() -> None:
+    """Translate transport timeouts into the application error."""
+
     def handler(_: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout(
             "timeout", request=httpx.Request("GET", "https://api.openalex.org/works/W1")
@@ -272,6 +285,7 @@ async def test_timeout() -> None:
 
 @pytest.mark.asyncio
 async def test_retry_exhausted_after_transient() -> None:
+    """Enforce the exact attempt count after transient failures."""
     count = {"n": 0}
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -292,26 +306,31 @@ async def test_retry_exhausted_after_transient() -> None:
 
 @pytest.mark.asyncio
 async def test_cancellation_propagates() -> None:
+    """Propagate cancellation from an active acquisition."""
+    started = asyncio.Event()
+    calls = []
+
     async def handler(_: httpx.Request) -> httpx.Response:
-        # Simulate cancellation during request
-        raise asyncio.CancelledError()
+        calls.append(1)
+        started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("Cancelled acquisition must not resume")
 
-    # Use a transport that raises CancelledError via custom client mock
-    class CancellingClient:
-        async def get(self, *_, **__) -> httpx.Response:
-            raise asyncio.CancelledError()
-
-        async def aclose(self) -> None:
-            return None
-
-    settings = OpenAlexSettings(base_url="https://api.openalex.org", max_retries=2)
-    adapter = OpenAlexPaperAdapter(settings=settings, client=CancellingClient())  # type: ignore[arg-type]
-    with pytest.raises(asyncio.CancelledError):
-        await adapter.fetch_paper(OpenAlexWorkId.parse("W1"))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = OpenAlexPaperAdapter(OpenAlexSettings(max_retries=2), client)
+        task = asyncio.create_task(adapter.fetch_paper(OpenAlexWorkId("W1")))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert calls == [1]
+        assert not client.is_closed
 
 
 @pytest.mark.asyncio
 async def test_malformed_json_raises() -> None:
+    """Reject responses that cannot be decoded as JSON."""
+
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"not json")
 
@@ -325,6 +344,7 @@ async def test_malformed_json_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_doi_lookup_uses_doi_url() -> None:
+    """Encode the normalized DOI in the singleton lookup URL."""
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -340,6 +360,7 @@ async def test_doi_lookup_uses_doi_url() -> None:
 
 
 def test_topic_score_not_zero_when_missing() -> None:
+    """Keep a missing provider topic score explicitly unknown."""
     payload = _complete_payload("W1")
     payload["topics"] = [{"id": "T1", "display_name": "Topic", "score": None}]
     # Direct translation via adapter's internal? Test via full fetch

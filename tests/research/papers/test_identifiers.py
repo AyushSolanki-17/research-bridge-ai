@@ -11,6 +11,7 @@ from research_bridge.research.papers.domain.identifiers import (
 
 
 def test_doi_equivalence() -> None:
+    """Equivalent forms and direct construction share canonical identity."""
     a = Doi.parse("10.7717/peerj.4375")
     b = Doi.parse("doi:10.7717/peerj.4375")
     c = Doi.parse("DOI:10.7717/PEERJ.4375")
@@ -19,9 +20,11 @@ def test_doi_equivalence() -> None:
     assert a.value == "10.7717/peerj.4375"
     assert a == b == c == d == e
     assert a.url == "https://doi.org/10.7717/peerj.4375"
+    assert Doi("10.7717/PEERJ.4375") == a
 
 
 def test_doi_invalid_forms() -> None:
+    """Reject missing, foreign and malformed DOI identifiers."""
     invalid = [
         "",
         "   ",
@@ -40,6 +43,7 @@ def test_doi_invalid_forms() -> None:
 
 
 def test_openalex_equivalence() -> None:
+    """Normalize supported work URLs and case variants consistently."""
     a = OpenAlexWorkId.parse("W2741809807")
     b = OpenAlexWorkId.parse("w2741809807")
     c = OpenAlexWorkId.parse("https://openalex.org/W2741809807")
@@ -51,7 +55,11 @@ def test_openalex_equivalence() -> None:
 
 
 def test_openalex_invalid_forms() -> None:
+    """Reject extra path components and identifiers for other entity types."""
     invalid = [
+        "W123/not-a-work",
+        "W123?ignored",
+        "https://openalex.org/W123/not-a-work",
         "",
         "W",  # no digits
         "Wabc",
@@ -66,6 +74,7 @@ def test_openalex_invalid_forms() -> None:
 
 
 def test_parse_identifier_dispatch() -> None:
+    """Dispatch supported forms and reject unknown input."""
     doi = parse_identifier("10.1234/example")
     assert isinstance(doi, Doi)
     oa = parse_identifier("W12345")

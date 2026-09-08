@@ -22,7 +22,8 @@ https://help.openalex.org/api/get-single-entities/
 - Rate limits: 100 requests/second and daily budget; ``429 Too Many
   Requests`` on limit. Respect ``Retry-After``.
 - Data terms: OpenAlex data is made available under CC0 where applicable.
-  See https://openalex.org/legal/terms and provider documentation. Attribute
+  See https://help.openalex.org/access/overview/ and
+  https://openalex.org/OpenAlex_termsofservice.pdf. Attribute
   OpenAlex as the source; do not claim completeness over the scholarly
   corpus.
 
@@ -30,6 +31,17 @@ Configuration lives in ``infrastructure/settings.py`` via
 ``OpenAlexSettings.from_env()``. ``OPENALEX_BASE_URL``,
 ``OPENALEX_TIMEOUT`` (seconds), and ``OPENALEX_MAX_RETRIES`` are optional
 overrides. All network calls have explicit timeouts and finite retries.
+
+Timeout defaults to 10 seconds and must be finite, positive and at most 60
+seconds. It bounds the entire request attempt, including redirects, as well as
+HTTP I/O waits. Retries default to 3 and must be integers from 0 through 5.
+Invalid settings fail immediately with `ValueError`, including environment
+values. Redirects are followed even with an injected client; that client's
+finite redirect limit applies (HTTPX defaults to 20). Each attempt includes
+its redirects. Backoff is at most 2 seconds. Numeric and HTTP-date `Retry-After`
+values are honored; waits longer than 2 seconds stop with
+`ProviderRateLimitedError` rather than retrying early. Cancellation during
+requests or backoff propagates. Injected clients remain owned by the caller.
 
 ## Payload handling
 
@@ -45,6 +57,10 @@ overrides. All network calls have explicit timeouts and finite retries.
 - Topics keep the provider-supplied ``score`` unchanged and are marked
   ``InferenceStatus.INFERRED_PROVIDER``. A missing score stays ``None`` and
   is never zero.
+- Boolean, negative or nonnumeric citation counts become `None`. Topic scores
+  must be finite numbers in [0, 1]; invalid scores become `None`. Boolean abstract
+  positions are invalid. Other malformed optional metadata is omitted rather
+  than promoted to reported facts.
 - ``referenced_works`` entries that fail ``OpenAlexWorkId`` parsing are
   ignored; valid ones are normalized.
 

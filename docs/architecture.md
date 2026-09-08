@@ -1,6 +1,6 @@
 # Architecture
 
-Status: configured Python project with a FastAPI factory, process health endpoint, frozen uv dependencies, package build and runtime/import checks. Research and business capabilities remain scaffolds. See [runtime commands](../README.md).
+Status: the Python library resolves DOI and OpenAlex work identifiers through an injected provider port, returning canonical paper metadata and stable provenance. OpenAlex acquisition owns HTTP translation, validated timeouts, retries and cancellation. FastAPI exposes process health only; graph exploration and research transports remain unimplemented. See [runtime commands](../README.md).
 
 ## Source layout
 

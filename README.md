@@ -11,7 +11,7 @@ uv sync --frozen --extra server
 uv run --extra server research-bridge-ai-api
 ```
 
-Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. The API currently exposes process health only; research functionality is not implemented.
+Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. The API currently exposes process health only. DOI and OpenAlex identifier resolution is available through the Python library; graph exploration and research HTTP/CLI commands are not yet implemented.
 
 `RB_HOST` defaults to `127.0.0.1`; `RB_PORT` defaults to `8000`. `.env.example` documents optional settings. To load an env file, pass `uv run --env-file .env --extra server research-bridge-ai-api`; dotenv files are not loaded implicitly. No database or provider credentials are required.
 
@@ -29,6 +29,23 @@ uv run research-bridge --version
 ```
 
 Research commands will be added with their capabilities.
+
+## Resolve a paper with the library
+
+The library returns canonical metadata and stable source evidence. This example
+uses live OpenAlex access; the normal test suite remains offline. See
+[provider configuration and limits](src/research_bridge/ingestion/openalex/README.md).
+
+```python
+import asyncio
+
+from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
+from research_bridge.research.papers.application.resolve_paper import ResolvePaper
+
+result = asyncio.run(ResolvePaper(OpenAlexPaperAdapter()).execute("10.7717/peerj.4375"))
+print(result.paper.title)
+print(result.evidence.to_dict())
+```
 
 ## Checks and packaging
 

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from datetime import UTC, date, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -57,7 +59,7 @@ def reconstruct_abstract(inverted_index: Any) -> str | None:
         if not isinstance(indices, list):
             return None
         for pos in indices:
-            if not isinstance(pos, int) or pos < 0:
+            if type(pos) is not int or pos < 0:
                 return None
             positions.append((pos, word))
     if not positions:
@@ -102,7 +104,14 @@ def _parse_topics(raw: Any) -> tuple[Topic, ...]:
         if score is not None and not isinstance(score, (int, float)):
             score = None
         # Never coerce unknown to zero.
-        score_f = float(score) if isinstance(score, (int, float)) else None
+        score_f = (
+            float(score)
+            if isinstance(score, (int, float))
+            and not isinstance(score, bool)
+            and math.isfinite(score)
+            and 0 <= score <= 1
+            else None
+        )
         # Subfield/field/domain may be nested dicts or strings.
         subfield: str | None = None
         field: str | None = None
@@ -272,7 +281,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
     # Citation count: preserve None vs 0
     cited_by: int | None = None
     raw_count = payload.get("cited_by_count")
-    if isinstance(raw_count, int) and raw_count >= 0:
+    if type(raw_count) is int and raw_count >= 0:
         cited_by = raw_count
     elif raw_count is None and "cited_by_count" not in payload:
         cited_by = None
@@ -320,9 +329,8 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
 class OpenAlexPaperAdapter:
     """HTTP adapter for OpenAlex singleton work lookup.
 
-    Attributes:
-        settings: Provider settings with base URL, timeout and retry limits.
-        client: Injected HTTP client; if ``None`` a new client is created per call.
+    The adapter creates a client per call unless the caller supplies one.
+    An injected client remains owned by the caller.
     """
 
     def __init__(
@@ -356,6 +364,12 @@ class OpenAlexPaperAdapter:
         Bounded: each network request has an explicit timeout and the total
         number of requests is finite. Rate limits and transient failures are
         retried with backoff; cancellation stops further acquisition.
+
+        Args:
+            identifier: Canonical DOI or OpenAlex work identifier.
+
+        Returns:
+            Translated paper and stable source evidence.
 
         Raises:
             PaperNotFoundError: If the provider returns 404.
@@ -394,8 +408,11 @@ class OpenAlexPaperAdapter:
 
         for attempt in range(max_retries + 1):
             try:
-                resp = await client.get(url, headers=headers, timeout=timeout)
-            except httpx.TimeoutException as exc:
+                async with asyncio.timeout(timeout):
+                    resp = await client.get(
+                        url, headers=headers, timeout=timeout, follow_redirects=True
+                    )
+            except (httpx.TimeoutException, TimeoutError) as exc:
                 last_exc = exc
                 if attempt == max_retries:
                     if max_retries == 0:
@@ -439,10 +456,16 @@ class OpenAlexPaperAdapter:
                     ) from last_exc
                 retry_after = resp.headers.get("Retry-After")
                 try:
-                    delay = float(retry_after) if retry_after else 0.2 * (2**attempt)
+                    delay = float(retry_after) if retry_after else min(0.2 * (2**attempt), 2.0)
                 except ValueError:
-                    delay = 0.2 * (2**attempt)
-                delay = min(delay, 2.0)
+                    try:
+                        retry_date = parsedate_to_datetime(retry_after or "")
+                        delay = (retry_date - datetime.now(UTC)).total_seconds()
+                    except (ValueError, TypeError, OverflowError):
+                        delay = min(0.2 * (2**attempt), 2.0)
+                if not math.isfinite(delay) or delay > 2.0:
+                    raise ProviderRateLimitedError("Retry-After exceeds the 2 second wait limit")
+                delay = max(delay, 0.0)
                 try:
                     await asyncio.sleep(delay)
                 except asyncio.CancelledError:
