@@ -4,6 +4,10 @@ Research Bridge provides inspectable citation exploration for scholarly papers. 
 
 ## Research semantics
 
+Implemented behavior: identifier resolution and bounded outgoing citation
+exploration and title search with explicit candidate selection through the library,
+HTTP and CLI. Incoming/combined traversal and filters remain planned capabilities.
+
 - Citation records show a reference relationship, not proven influence or causality.
 - Preserve provider identifiers, source references and observation times. Distinguish reported facts from inference; unknown confidence is not zero.
 - Support arbitrary seeds; “Attention Is All You Need” may be a demo input, never a special case in business logic.

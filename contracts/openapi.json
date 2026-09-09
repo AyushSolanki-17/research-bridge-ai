@@ -1,6 +1,288 @@
 {
   "components": {
     "schemas": {
+      "Author": {
+        "description": "Paper author.\n\nAttributes:\n    display_name: Author name as reported by the provider.\n    orcid: ORCID identifier if available.\n    position: Authorship position (e.g., ``first``, ``middle``, ``last``).",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "orcid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orcid"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "Author",
+        "type": "object"
+      },
+      "CitationEdge": {
+        "description": "Reported citation from source to target, with its original reference identity.\n\nAttributes:\n    source: Canonical citing work.\n    target: Canonical referenced work if resolved; otherwise original identifier.\n    referenced_id: Identifier asserted by the source before merge resolution.\n    evidence: Source record and observation supporting this reference assertion.",
+        "properties": {
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "referenced_id": {
+            "$ref": "#/components/schemas/OpenAlexWorkId"
+          },
+          "source": {
+            "$ref": "#/components/schemas/OpenAlexWorkId"
+          },
+          "target": {
+            "$ref": "#/components/schemas/OpenAlexWorkId"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "referenced_id",
+          "evidence"
+        ],
+        "title": "CitationEdge",
+        "type": "object"
+      },
+      "Doi": {
+        "description": "Validated DOI value object.\n\nAttributes:\n    value: Normalized DOI (lowercased, without prefix or URL).",
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "Doi",
+        "type": "object"
+      },
+      "ErrorDetail": {
+        "description": "Stable error code and safe message, without internal exception details.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Expected research HTTP failure envelope.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "Evidence": {
+        "description": "Stable, source-attributed evidence record.\n\nAttributes:\n    id: Stable identifier, e.g., ``openalex:work:W2741809807``.\n    provider: Provider name, e.g., ``openalex``.\n    provider_record_id: Provider's record identifier, e.g., ``W2741809807``.\n    source_url: Inspectable source reference URL.\n    observed_at: Time the record was observed. Does not affect identity.\n    inference_status: How the associated fact should be interpreted.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inference_status": {
+            "$ref": "#/components/schemas/InferenceStatus",
+            "default": "reported"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_record_id": {
+            "title": "Provider Record Id",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "provider_record_id",
+          "source_url",
+          "observed_at"
+        ],
+        "title": "Evidence",
+        "type": "object"
+      },
+      "ExplorationLimits": {
+        "description": "Validated bounds for one outgoing neighborhood.\n\nAttributes:\n    depth: Citation hops, from 1 through 3; seed is at depth zero.\n    max_nodes: Paper limit including the seed, from 1 through 500.\n    max_edges: Unique directed edge limit, from 1 through 2000.\n    max_requests: Physical request limit including retries, from 1 through 1000.\n    max_seconds: Positive finite elapsed limit, at most 120 seconds.",
+        "properties": {
+          "depth": {
+            "default": 1,
+            "title": "Depth",
+            "type": "integer"
+          },
+          "max_edges": {
+            "default": 200,
+            "title": "Max Edges",
+            "type": "integer"
+          },
+          "max_nodes": {
+            "default": 50,
+            "title": "Max Nodes",
+            "type": "integer"
+          },
+          "max_requests": {
+            "default": 100,
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "default": 30.0,
+            "title": "Max Seconds",
+            "type": "number"
+          }
+        },
+        "title": "ExplorationLimits",
+        "type": "object"
+      },
+      "ExplorationResult": {
+        "description": "Immutable acquired neighborhood and explicit completion evidence.\n\nAttributes:\n    seed: Resolved seed identity, or None if acquisition failed.\n    nodes: Unique acquired papers in breadth-first discovery order.\n    edges: Unique directed citations in stable traversal order.\n    unresolved: References that could not be acquired.\n    incomplete_metadata: Missing fields on acquired records.\n    status: Complete within scope, truncated, or failed acquisition.\n    stop_reasons: Machine-readable explanations, empty for complete results.\n    limits: Applied validated bounds.\n    requests: Physical provider requests consumed, including seed and retries.\n    elapsed_seconds: Monotonic operation duration.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/CitationEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "number"
+          },
+          "incomplete_metadata": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataGap"
+            },
+            "title": "Incomplete Metadata",
+            "type": "array"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ExplorationLimits"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedPaper"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenAlexWorkId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "truncated",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stop Reasons",
+            "type": "array"
+          },
+          "unresolved": {
+            "items": {
+              "$ref": "#/components/schemas/UnresolvedReference"
+            },
+            "title": "Unresolved",
+            "type": "array"
+          }
+        },
+        "required": [
+          "seed",
+          "nodes",
+          "edges",
+          "unresolved",
+          "incomplete_metadata",
+          "status",
+          "stop_reasons",
+          "limits",
+          "requests",
+          "elapsed_seconds"
+        ],
+        "title": "ExplorationResult",
+        "type": "object"
+      },
+      "ExploreRequest": {
+        "additionalProperties": false,
+        "description": "Outgoing exploration input with optional bounded overrides.",
+        "properties": {
+          "identifier": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Identifier",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/LimitsRequest"
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "title": "ExploreRequest",
+        "type": "object"
+      },
       "HealthResponse": {
         "description": "Immutable HTTP contract for process liveness.",
         "properties": {
@@ -12,6 +294,530 @@
           }
         },
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "InferenceStatus": {
+        "description": "Whether a value was reported or inferred.\n\nAttributes:\n    REPORTED: Directly reported fact (e.g., title, citation count).\n    INFERRED_PROVIDER: Value inferred or classified by the provider\n        (e.g., OpenAlex topics with a supplied score).",
+        "enum": [
+          "reported",
+          "inferred_provider"
+        ],
+        "title": "InferenceStatus",
+        "type": "string"
+      },
+      "LimitsRequest": {
+        "additionalProperties": false,
+        "description": "HTTP budget types; the application owns numeric bounds and validation.",
+        "properties": {
+          "depth": {
+            "default": 1,
+            "description": "Citation hops: 1 through 3.",
+            "title": "Depth",
+            "type": "integer"
+          },
+          "max_edges": {
+            "default": 200,
+            "description": "Edges: 1 through 2000.",
+            "title": "Max Edges",
+            "type": "integer"
+          },
+          "max_nodes": {
+            "default": 50,
+            "description": "Papers: 1 through 500.",
+            "title": "Max Nodes",
+            "type": "integer"
+          },
+          "max_requests": {
+            "default": 100,
+            "description": "Physical requests: 1 through 1000.",
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "default": 30.0,
+            "description": "Finite elapsed seconds: greater than 0, at most 120.",
+            "title": "Max Seconds",
+            "type": "number"
+          }
+        },
+        "title": "LimitsRequest",
+        "type": "object"
+      },
+      "MetadataGap": {
+        "description": "Unavailable metadata fields for an acquired work.\n\nAttributes:\n    work_id: Canonical work identity.\n    fields: Field names with unavailable values; no facts are inferred.",
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "work_id": {
+            "$ref": "#/components/schemas/OpenAlexWorkId"
+          }
+        },
+        "required": [
+          "work_id",
+          "fields"
+        ],
+        "title": "MetadataGap",
+        "type": "object"
+      },
+      "OpenAlexWorkId": {
+        "description": "Validated OpenAlex work identifier.\n\nAttributes:\n    value: Normalized identifier (uppercase ``W`` + digits).",
+        "properties": {
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "OpenAlexWorkId",
+        "type": "object"
+      },
+      "Paper": {
+        "description": "Canonical paper record.\n\nAttributes:\n    identifiers: Stable work identifiers.\n    title: Paper title, or ``None`` if not reported.\n    publication_date: Publication date, or ``None`` if unknown.\n    venue: Publication venue, or ``None`` if unknown.\n    authors: Ordered authors as reported.\n    abstract: Reconstructed abstract text, or ``None`` if unavailable.\n    cited_by_count: Provider-reported citation count, or ``None`` if missing.\n        A reported ``0`` is preserved as ``0``.\n    topics: Provider-reported topics with explicit inference status.\n    referenced_works: Normalized OpenAlex IDs of referenced works.\n    references_complete: Whether the provider supplied a valid reference list.\n        False distinguishes missing or malformed lists from known empty lists.",
+        "properties": {
+          "abstract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstract"
+          },
+          "authors": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Author"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "cited_by_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited By Count"
+          },
+          "identifiers": {
+            "$ref": "#/components/schemas/PaperIdentifiers"
+          },
+          "publication_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Date"
+          },
+          "referenced_works": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OpenAlexWorkId"
+            },
+            "title": "Referenced Works",
+            "type": "array"
+          },
+          "references_complete": {
+            "default": false,
+            "title": "References Complete",
+            "type": "boolean"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "topics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Topic"
+            },
+            "title": "Topics",
+            "type": "array"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Venue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "identifiers"
+        ],
+        "title": "Paper",
+        "type": "object"
+      },
+      "PaperIdentifiers": {
+        "description": "Stable identifiers for a paper.\n\nAttributes:\n    openalex_id: Normalized OpenAlex work ID.\n    doi: Normalized DOI if available.",
+        "properties": {
+          "doi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Doi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "openalex_id": {
+            "$ref": "#/components/schemas/OpenAlexWorkId"
+          }
+        },
+        "required": [
+          "openalex_id"
+        ],
+        "title": "PaperIdentifiers",
+        "type": "object"
+      },
+      "ResolveRequest": {
+        "additionalProperties": false,
+        "description": "Identifier lookup input; unknown fields are rejected.",
+        "properties": {
+          "identifier": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "title": "ResolveRequest",
+        "type": "object"
+      },
+      "ResolvedPaper": {
+        "description": "Framework-independent result for a resolved paper.\n\nAttributes:\n    paper: Canonical paper record.\n    evidence: Stable attribution for the record.",
+        "properties": {
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "paper": {
+            "$ref": "#/components/schemas/Paper"
+          }
+        },
+        "required": [
+          "paper",
+          "evidence"
+        ],
+        "title": "ResolvedPaper",
+        "type": "object"
+      },
+      "SearchLimits": {
+        "description": "Validated search bounds, including replay of earlier candidate pages.\n\nAttributes:\n    page_size: Candidates per public page, from 1 to 100.\n    max_results: Unique candidates considered per search, from 1 to 500.\n    max_requests: Physical requests per call, from 1 to 100.\n    max_seconds: Finite elapsed allowance per call, greater than 0 up to 120.",
+        "properties": {
+          "max_requests": {
+            "default": 20,
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "max_results": {
+            "default": 100,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "default": 30.0,
+            "title": "Max Seconds",
+            "type": "number"
+          },
+          "page_size": {
+            "default": 10,
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "title": "SearchLimits",
+        "type": "object"
+      },
+      "SearchLimitsRequest": {
+        "additionalProperties": false,
+        "description": "Search budget types; application contracts validate numeric bounds.",
+        "properties": {
+          "max_requests": {
+            "default": 20,
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "max_results": {
+            "default": 100,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "default": 30.0,
+            "title": "Max Seconds",
+            "type": "number"
+          },
+          "page_size": {
+            "default": 10,
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "title": "SearchLimitsRequest",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "additionalProperties": false,
+        "description": "Title text and one-based candidate page, without automatic seed selection.",
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/SearchLimitsRequest"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SearchResult": {
+        "description": "One deduplicated candidate page and truthful acquisition status.\n\nAttributes:\n    query: Normalized title query; no candidate is implicitly selected.\n    page: One-based requested page.\n    candidates: Available candidates on this page, each with evidence.\n    next_page: Next page only when more provider results can be reviewed.\n    status: Complete at provider end, more for pagination, truncated at a\n        limit or repeated cursor, or failed on an upstream error.\n    stop_reasons: Machine-readable reasons for incomplete acquisition.\n    limits: Applied bounds, including replay of prior pages.\n    requests: Physical requests consumed by this call.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedPaper"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/SearchLimits"
+          },
+          "next_page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Page"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "more",
+              "truncated",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stop Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "page",
+          "candidates",
+          "next_page",
+          "status",
+          "stop_reasons",
+          "limits",
+          "requests"
+        ],
+        "title": "SearchResult",
+        "type": "object"
+      },
+      "Topic": {
+        "description": "Provider-classified topic.\n\nAttributes:\n    id: Topic identifier (e.g., OpenAlex topic URL or ID).\n    display_name: Human readable topic name.\n    score: Provider-supplied relevance score, or ``None`` if not reported.\n    inference_status: Always ``INFERRED_PROVIDER`` for OpenAlex topics.\n    subfield: Optional subfield name if provider supplies it.\n    field: Optional field name if provider supplies it.\n    domain: Optional domain name if provider supplies it.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "inference_status": {
+            "$ref": "#/components/schemas/InferenceStatus",
+            "default": "inferred_provider"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "subfield": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subfield"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "score"
+        ],
+        "title": "Topic",
+        "type": "object"
+      },
+      "UnresolvedReference": {
+        "description": "An acquired reference whose target could not be resolved.\n\nAttributes:\n    source: Citing work, absent only for seed acquisition failure.\n    target: Requested target identifier.\n    reason: Missing work, provider failure, cancellation or budget limit.",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenAlexWorkId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "reason"
+        ],
+        "title": "UnresolvedReference",
+        "type": "object"
+      },
+      "Venue": {
+        "description": "Publication venue.\n\nAttributes:\n    display_name: Venue name as reported.\n    id: OpenAlex source ID if available (e.g., ``S123`` or URL).",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "title": "Venue",
         "type": "object"
       }
     }
@@ -41,6 +847,252 @@
         "summary": "Health",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/v1/graphs/outgoing": {
+      "post": {
+        "description": "Return an outgoing neighborhood with explicit scope and completion status.",
+        "operationId": "explore_outgoing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExploreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationResult"
+                }
+              }
+            },
+            "description": "Seed not found."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationResult"
+                }
+              }
+            },
+            "description": "Provider failure with partial data."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Explore Outgoing",
+        "tags": [
+          "research"
+        ]
+      }
+    },
+    "/v1/papers/resolve": {
+      "post": {
+        "description": "Resolve a DOI or work identifier to canonical metadata and evidence.",
+        "operationId": "resolve_paper",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedPaper"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Resolve Paper",
+        "tags": [
+          "research"
+        ]
+      }
+    },
+    "/v1/papers/search": {
+      "post": {
+        "description": "Review an attributed candidate page; select an identifier to resolve or explore.",
+        "operationId": "search_papers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Provider failure with partial candidates."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Search Papers",
+        "tags": [
+          "research"
         ]
       }
     }

@@ -1,10 +1,10 @@
 # Citation Explorer tasks
 
-Status: identifier resolution is implemented in the Python library with canonical metadata and provenance. Process health, CLI help/version, runtime configuration and build/check tooling also exist. Citation exploration and research HTTP/CLI commands remain unimplemented.
+Status: identifier resolution and bounded outgoing citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search with explicit selection is implemented; incoming/combined exploration and filtering remain unimplemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Outgoing citation exploration is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Incoming and combined exploration is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -54,6 +54,18 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** `knowledge_graph`.
 
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
+   Acceptance evidence: deterministic tests in `tests/knowledge_graph/test_explore.py`
+   and `tests/ingestion/openalex/test_operation_budget.py`. These cover hop depth,
+   cycles, deduplication, canonical merges, evidence, all count boundaries,
+   controlled elapsed time, incomplete references, failures and cancellation.
+   Numeric limits and exact completeness semantics are documented in the capability
+   README. Provider ports now accept a shared acquisition budget; custom providers
+   must account for every physical request. No database or migration is needed.
+   Verification: Ruff lint/format, strict mypy, pytest (87 passed), OpenAPI drift
+   check and wheel/sdist build passed. The suite remains offline; two existing
+   dependency deprecation warnings remain. Live provider and Docker not tested.
+
    **After this task:** Given an ingested seed, the library can return the papers it cites across 1–3 hops, with directed edges, evidence and explicit limits or missing references.
 
    **Deliverable:** an in-memory outgoing citation neighborhood use case with source-attributed directed edges.
@@ -73,6 +85,21 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** `api`, capability application contracts, `cli.py`.
 
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
+   `POST /v1/papers/resolve`, `POST /v1/graphs/outgoing`, `research-bridge resolve`
+   and `research-bridge explore` call the same library use cases. Offline journeys
+   in `tests/test_research_journeys.py` compare metadata, evidence, graph limits,
+   success, truncation and failures across callers. README examples and the OpenAPI
+   snapshot describe actual contracts. No database migration or authentication
+   dependency is introduced. Earlier process-health behavior is preserved.
+   Verification: Ruff lint/format, strict mypy, pytest (109 passed), exported
+   OpenAPI drift check and wheel/sdist build passed. A clean wheel installation
+   without FastAPI imported the library and CLI, then ran actual CLI processes
+   for resolution, complete/truncated exploration and invalid input against a
+   local synthetic HTTP provider. Two existing dependency deprecation warnings
+   remain. `docker build -t research-bridge-ai:local .` also passed. External
+   OpenAlex was not tested; no deployment or container publication was performed.
+
    **After this task:** A caller can resolve an identifier, request an outgoing graph and inspect its evidence from a terminal or HTTP client, using the same library behavior.
 
    **Deliverable:** identifier resolution and outgoing exploration available through supported application exports, HTTP handlers in `api/` and CLI commands. API and CLI entrypoints wire concrete dependencies.
@@ -90,6 +117,26 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 4. **Search by title and select a paper**
 
    **Owner:** `research/papers`, `ingestion/openalex`.
+
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-09).
+   Evidence: `tests/research/papers/test_search_papers.py` exercises ambiguous titles,
+   explicit selection into outgoing exploration, no matches, cursor pagination,
+   duplicate candidates, repeated cursors, exact result/request/time limits,
+   cancellation, partial failure and library/HTTP/CLI contracts. The adapter reuses
+   existing bounded HTTP acquisition. Public numbered pages replay and deduplicate
+   the provider sequence; no server-side search session or database is introduced.
+   Limitations: page membership can change with provider updates; commas and pipes
+   in title queries are rejected. OpenAlex title-only filter search is documented
+   but deprecated. Live provider acquisition has not been tested.
+   Verification: `uv run ruff check .`, `uv run ruff format --check .`,
+   `uv run --extra server mypy`, `uv run --extra server pytest` (140 passed),
+   `uv run --extra server python scripts/export_openapi.py --check` and `uv build`
+   passed. The exported search contract and wheel/sdist contents were reviewed.
+   A clean wheel installation without FastAPI ran library and actual CLI search,
+   explicit identifier selection and outgoing exploration against a local synthetic
+   HTTP provider. Changed documentation links passed inspection. Two existing
+   dependency deprecation warnings remain. Review also verified that injected CLI
+   search bypasses unused OpenAlex configuration. Docker was not rerun for this change.
 
    **After this task:** A caller can enter a title, review paginated candidates, explicitly choose the intended paper and explore it.
 
@@ -158,4 +205,4 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
 
-Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; title search, incoming exploration and filters are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
+Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; incoming exploration, filters and complete-journey verification are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.

@@ -36,12 +36,18 @@ Timeout defaults to 10 seconds and must be finite, positive and at most 60
 seconds. It bounds the entire request attempt, including redirects, as well as
 HTTP I/O waits. Retries default to 3 and must be integers from 0 through 5.
 Invalid settings fail immediately with `ValueError`, including environment
-values. Redirects are followed even with an injected client; that client's
-finite redirect limit applies (HTTPX defaults to 20). Each attempt includes
+values. Redirects are followed even with an injected client; the adapter allows
+at most 20 redirects per attempt. Each attempt includes
 its redirects. Backoff is at most 2 seconds. Numeric and HTTP-date `Retry-After`
 values are honored; waits longer than 2 seconds stop with
 `ProviderRateLimitedError` rather than retrying early. Cancellation during
 requests or backoff propagates. Injected clients remain owned by the caller.
+
+The optional `AcquisitionBudget` from the paper application contracts accounts
+for every physical request, including retries and redirects. Graph exploration
+passes one budget through the entire operation. Per-attempt timeouts and retry
+waits are capped by its remaining elapsed allowance. Budget exhaustion raises
+`AcquisitionLimitReached`; it is never retried as an upstream failure.
 
 ## Payload handling
 
@@ -62,7 +68,9 @@ requests or backoff propagates. Injected clients remain owned by the caller.
   positions are invalid. Other malformed optional metadata is omitted rather
   than promoted to reported facts.
 - ``referenced_works`` entries that fail ``OpenAlexWorkId`` parsing are
-  ignored; valid ones are normalized.
+  omitted; valid ones are normalized. `references_complete` is false when the
+  list is absent, malformed or contains invalid entries, and true for a valid
+  list including an empty one. This prevents false completeness in traversal.
 
 ## Errors
 
@@ -82,3 +90,19 @@ The adapter distinguishes:
 Provider JSON never becomes a canonical model.
 
 Follow [architecture](../../../../docs/architecture.md).
+
+## Title search (checked 2026-09-09)
+
+Official [search documentation](https://help.openalex.org/api/searching/) documents
+`GET /works?filter=title.search:TEXT` for title-only matching. This field-search
+syntax remains supported but is deprecated; the recommended general `search`
+parameter also searches abstracts/full text and therefore does not meet title-only
+semantics. This adapter deliberately retains the documented title-specific operation.
+Provider stemming and search syntax apply; results need explicit caller review.
+
+The [pagination contract](https://help.openalex.org/api/paging/) supports `cursor=*`,
+`meta.next_cursor` and `per_page` up to 100. Search follows opaque cursors, treats
+null as end, and fails on missing/malformed pagination metadata or malformed work
+identities. It reuses singleton metadata translation and physical HTTP accounting.
+Search credentials, retry settings and data attribution follow the configuration above.
+No live search request was made during verification.

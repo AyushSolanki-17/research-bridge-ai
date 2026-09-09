@@ -18,6 +18,7 @@ import httpx
 
 from research_bridge.ingestion.openalex.infrastructure.settings import OpenAlexSettings
 from research_bridge.provenance.domain.evidence import Evidence, InferenceStatus
+from research_bridge.research.papers.application.acquisition import AcquisitionBudget
 from research_bridge.research.papers.application.errors import (
     PaperNotFoundError,
     ProviderMalformedResponseError,
@@ -26,6 +27,7 @@ from research_bridge.research.papers.application.errors import (
     ProviderTimeoutError,
 )
 from research_bridge.research.papers.application.ports import ResolvedPaper
+from research_bridge.research.papers.application.search_papers import CandidatePage
 from research_bridge.research.papers.domain.identifiers import Doi, OpenAlexWorkId
 from research_bridge.research.papers.domain.paper import (
     Author,
@@ -296,13 +298,16 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
     # Referenced works: list of OpenAlex URLs
     ref_ids: list[OpenAlexWorkId] = []
     raw_refs = payload.get("referenced_works")
+    references_complete = isinstance(raw_refs, list)
     if isinstance(raw_refs, list):
         for item in raw_refs:
             if not isinstance(item, str):
+                references_complete = False
                 continue
             try:
                 ref_ids.append(OpenAlexWorkId.parse(item))
             except Exception:
+                references_complete = False
                 continue
 
     identifiers = PaperIdentifiers(openalex_id=openalex_id, doi=doi_value)
@@ -316,6 +321,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
         cited_by_count=cited_by,
         topics=tuple(topics),
         referenced_works=tuple(ref_ids),
+        references_complete=references_complete,
     )
     # Evidence identity is stable, observation time does not affect id.
     evidence = Evidence.paper_evidence(
@@ -327,7 +333,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
 
 
 class OpenAlexPaperAdapter:
-    """HTTP adapter for OpenAlex singleton work lookup.
+    """HTTP adapter for OpenAlex work lookup and title candidate search.
 
     The adapter creates a client per call unless the caller supplies one.
     An injected client remains owned by the caller.
@@ -358,7 +364,9 @@ class OpenAlexPaperAdapter:
         # Prefer header auth to avoid key in URL logs.
         return {"Authorization": f"Bearer {self._settings.api_key}"}
 
-    async def fetch_paper(self, identifier: Doi | OpenAlexWorkId) -> ResolvedPaper:
+    async def fetch_paper(
+        self, identifier: Doi | OpenAlexWorkId, *, budget: AcquisitionBudget | None = None
+    ) -> ResolvedPaper:
         """Fetch and translate a single work.
 
         Bounded: each network request has an explicit timeout and the total
@@ -367,6 +375,7 @@ class OpenAlexPaperAdapter:
 
         Args:
             identifier: Canonical DOI or OpenAlex work identifier.
+            budget: Optional shared acquisition limits, including retries and redirects.
 
         Returns:
             Translated paper and stable source evidence.
@@ -390,9 +399,73 @@ class OpenAlexPaperAdapter:
             client = httpx.AsyncClient(follow_redirects=True)
 
         try:
-            return await self._fetch_with_retries(client, url, headers, identifier)
+            payload = await self._fetch_with_retries(client, url, headers, str(identifier), budget)
+            try:
+                return _translate_payload(payload, observed_at=datetime.now(UTC))
+            except ProviderMalformedResponseError:
+                raise
+            except Exception as exc:
+                raise ProviderMalformedResponseError("malformed work payload") from exc
         finally:
             if owns and client is not None:
+                await client.aclose()
+
+    async def search_titles(
+        self, query: str, *, cursor: str, page_size: int, budget: AcquisitionBudget
+    ) -> CandidatePage:
+        """Fetch title-only matches using the same bounded HTTP acquisition as lookup.
+
+        Args:
+            query: Application-validated title text.
+            cursor: Provider continuation, or '*' for the first page.
+            page_size: Requested record count, at most 100.
+            budget: Shared search allowance, including retries and redirects.
+
+        Returns:
+            Canonical works with attribution and the provider continuation.
+
+        Raises:
+            ProviderMalformedResponseError: For malformed list, cursor or work data.
+            AcquisitionLimitReached: When physical requests or elapsed time run out.
+            ProviderRateLimitedError: If rate limiting prevents acquisition.
+            ProviderTimeoutError: If a request times out.
+            ProviderRetryExhaustedError: If retry attempts are exhausted.
+            asyncio.CancelledError: If the operation is cancelled.
+        """
+        url = str(
+            httpx.URL(
+                f"{self._settings.base_url.rstrip('/')}/works",
+                params={
+                    "filter": f"title.search:{query}",
+                    "cursor": cursor,
+                    "per_page": str(page_size),
+                },
+            )
+        )
+        client = self._client or httpx.AsyncClient()
+        try:
+            payload = await self._fetch_with_retries(
+                client, url, self._build_auth(), "title search", budget
+            )
+            results, meta = payload.get("results"), payload.get("meta")
+            if not isinstance(results, list) or not isinstance(meta, dict):
+                raise ProviderMalformedResponseError("expected search results and metadata")
+            if "next_cursor" not in meta:
+                raise ProviderMalformedResponseError("missing search continuation")
+            continuation = meta["next_cursor"]
+            if continuation is not None and (
+                not isinstance(continuation, str) or not continuation or len(continuation) > 4096
+            ):
+                raise ProviderMalformedResponseError("invalid search continuation")
+            if len(results) > page_size or any(not isinstance(item, dict) for item in results):
+                raise ProviderMalformedResponseError("invalid search records")
+            observed_at = datetime.now(UTC)
+            return CandidatePage(
+                tuple(_translate_payload(item, observed_at=observed_at) for item in results),
+                continuation,
+            )
+        finally:
+            if self._owns_client:
                 await client.aclose()
 
     async def _fetch_with_retries(
@@ -400,20 +473,35 @@ class OpenAlexPaperAdapter:
         client: httpx.AsyncClient,
         url: str,
         headers: dict[str, str],
-        identifier: Doi | OpenAlexWorkId,
-    ) -> ResolvedPaper:
+        identifier: str,
+        budget: AcquisitionBudget | None,
+    ) -> dict[str, Any]:
         max_retries = self._settings.max_retries
         timeout = self._settings.timeout_seconds
         last_exc: Exception | None = None
 
         for attempt in range(max_retries + 1):
             try:
-                async with asyncio.timeout(timeout):
-                    resp = await client.get(
-                        url, headers=headers, timeout=timeout, follow_redirects=True
+                attempt_timeout = min(timeout, budget.remaining_seconds()) if budget else timeout
+                async with asyncio.timeout(attempt_timeout):
+                    request = client.build_request(
+                        "GET", url, headers=headers, timeout=attempt_timeout
                     )
+                    redirects = 0
+                    while True:
+                        if budget:
+                            budget.consume_request()
+                        resp = await client.send(request, follow_redirects=False)
+                        if resp.next_request is None:
+                            break
+                        redirects += 1
+                        if redirects > 20:
+                            raise httpx.TooManyRedirects("redirect limit exceeded", request=request)
+                        request = resp.next_request
             except (httpx.TimeoutException, TimeoutError) as exc:
                 last_exc = exc
+                if budget:
+                    budget.remaining_seconds()
                 if attempt == max_retries:
                     if max_retries == 0:
                         raise ProviderTimeoutError(f"timeout for {url}") from exc
@@ -423,7 +511,7 @@ class OpenAlexPaperAdapter:
                     ) from exc
                 # Backoff but bounded; allow cancellation during sleep.
                 try:
-                    await asyncio.sleep(min(0.2 * (2**attempt), 2.0))
+                    await self._wait(min(0.2 * (2**attempt), 2.0), budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -437,7 +525,7 @@ class OpenAlexPaperAdapter:
                         attempts=max_retries + 1,
                     ) from exc
                 try:
-                    await asyncio.sleep(min(0.2 * (2**attempt), 2.0))
+                    await self._wait(min(0.2 * (2**attempt), 2.0), budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -467,7 +555,7 @@ class OpenAlexPaperAdapter:
                     raise ProviderRateLimitedError("Retry-After exceeds the 2 second wait limit")
                 delay = max(delay, 0.0)
                 try:
-                    await asyncio.sleep(delay)
+                    await self._wait(delay, budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -479,7 +567,7 @@ class OpenAlexPaperAdapter:
                         attempts=max_retries + 1,
                     ) from last_exc
                 try:
-                    await asyncio.sleep(min(0.2 * (2**attempt), 2.0))
+                    await self._wait(min(0.2 * (2**attempt), 2.0), budget)
                 except asyncio.CancelledError:
                     raise
                 continue
@@ -497,18 +585,14 @@ class OpenAlexPaperAdapter:
             if not isinstance(payload, dict):
                 raise ProviderMalformedResponseError("expected JSON object for work")
 
-            # Detect missing work encoded as JSON error instead of 404 (some providers)
-            # OpenAlex returns JSON with error field on 404 already handled.
-
-            observed_at = datetime.now(UTC)
-            try:
-                return _translate_payload(payload, observed_at=observed_at)
-            except ProviderMalformedResponseError:
-                raise
-            except Exception as exc:
-                raise ProviderMalformedResponseError("malformed work payload") from exc
+            return payload
 
         # Should not reach here; raise retries exhausted
         raise ProviderRetryExhaustedError(
             f"exhausted retries for {url}", attempts=max_retries + 1
         ) from last_exc
+
+    async def _wait(self, delay: float, budget: AcquisitionBudget | None) -> None:
+        if budget:
+            budget.check_wait(delay)
+        await asyncio.sleep(delay)

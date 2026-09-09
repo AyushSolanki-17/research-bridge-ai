@@ -97,6 +97,8 @@ class Paper:
             A reported ``0`` is preserved as ``0``.
         topics: Provider-reported topics with explicit inference status.
         referenced_works: Normalized OpenAlex IDs of referenced works.
+        references_complete: Whether the provider supplied a valid reference list.
+            False distinguishes missing or malformed lists from known empty lists.
     """
 
     identifiers: PaperIdentifiers
@@ -108,3 +110,4 @@ class Paper:
     cited_by_count: int | None = None
     topics: tuple[Topic, ...] = ()
     referenced_works: tuple[OpenAlexWorkId, ...] = ()
+    references_complete: bool = False

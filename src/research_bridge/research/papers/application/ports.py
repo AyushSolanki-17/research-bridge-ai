@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from research_bridge.provenance.domain.evidence import Evidence
+from research_bridge.research.papers.application.acquisition import AcquisitionBudget
 from research_bridge.research.papers.domain.identifiers import Doi, OpenAlexWorkId
 from research_bridge.research.papers.domain.paper import Paper
 
@@ -31,11 +32,15 @@ class PaperProviderPort(Protocol):
     leaking provider types.
     """
 
-    async def fetch_paper(self, identifier: Doi | OpenAlexWorkId) -> ResolvedPaper:
+    async def fetch_paper(
+        self, identifier: Doi | OpenAlexWorkId, *, budget: AcquisitionBudget | None = None
+    ) -> ResolvedPaper:
         """Fetch a single paper by DOI or OpenAlex work ID.
 
         Args:
             identifier: Normalized DOI or OpenAlex work identifier.
+            budget: Optional operation budget. Implementations must consume a unit
+                before every physical request and bound waits by remaining time.
 
         Returns:
             Canonical paper with stable evidence.
