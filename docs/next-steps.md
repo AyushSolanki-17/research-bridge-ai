@@ -1,10 +1,10 @@
 # Citation Explorer tasks
 
-Status: identifier resolution and bounded outgoing citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search, incoming/combined exploration and filtering remain unimplemented.
+Status: identifier resolution and bounded outgoing citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search with explicit selection is implemented; incoming/combined exploration and filtering remain unimplemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Title search with explicit selection is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Incoming and combined exploration is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -118,6 +118,26 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** `research/papers`, `ingestion/openalex`.
 
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-09).
+   Evidence: `tests/research/papers/test_search_papers.py` exercises ambiguous titles,
+   explicit selection into outgoing exploration, no matches, cursor pagination,
+   duplicate candidates, repeated cursors, exact result/request/time limits,
+   cancellation, partial failure and library/HTTP/CLI contracts. The adapter reuses
+   existing bounded HTTP acquisition. Public numbered pages replay and deduplicate
+   the provider sequence; no server-side search session or database is introduced.
+   Limitations: page membership can change with provider updates; commas and pipes
+   in title queries are rejected. OpenAlex title-only filter search is documented
+   but deprecated. Live provider acquisition has not been tested.
+   Verification: `uv run ruff check .`, `uv run ruff format --check .`,
+   `uv run --extra server mypy`, `uv run --extra server pytest` (140 passed),
+   `uv run --extra server python scripts/export_openapi.py --check` and `uv build`
+   passed. The exported search contract and wheel/sdist contents were reviewed.
+   A clean wheel installation without FastAPI ran library and actual CLI search,
+   explicit identifier selection and outgoing exploration against a local synthetic
+   HTTP provider. Changed documentation links passed inspection. Two existing
+   dependency deprecation warnings remain. Review also verified that injected CLI
+   search bypasses unused OpenAlex configuration. Docker was not rerun for this change.
+
    **After this task:** A caller can enter a title, review paginated candidates, explicitly choose the intended paper and explore it.
 
    **Deliverable:** bounded, paginated title candidate search and explicit selection through the library, HTTP and CLI.
@@ -185,4 +205,4 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
 
-Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; title search, incoming exploration and filters are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
+Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; incoming exploration, filters and complete-journey verification are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoing citation neighborhoods through the same application use cases. OpenAlex acquisition counts physical requests, redirects and retries against operation budgets. Knowledge graph owns breadth-first traversal, directed edges, evidence and partial-result semantics. API assembly and CLI compose the provider; HTTP schemas and error mapping stay in `api/`. See [runtime commands](../README.md).
+Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoing citation neighborhoods through the same application use cases. OpenAlex acquisition counts physical requests, redirects and retries against operation budgets. Knowledge graph owns breadth-first traversal, directed edges, evidence and partial-result semantics. API assembly and CLI compose the provider; HTTP schemas and error mapping stay in `api/`. Title candidate search is owned by the paper application through a separate search port; the OpenAlex adapter reuses bounded HTTP acquisition and canonical metadata translation. Stateless public pages replay and deduplicate provider cursor pages. See [runtime commands](../README.md).
 
 ## Source layout
 

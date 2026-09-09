@@ -56,3 +56,19 @@ Every unresolved edge target is identified in the graph's `unresolved` entries.
 same deterministic provider, including truncation, partial failures and safe errors.
 The independent command-line entrypoint lives in `research_bridge/cli.py`.
 See the [runtime commands](../../../README.md).
+
+## Title candidate search
+
+`POST /v1/papers/search` accepts `query`, optional one-based `page` and optional
+`limits` (`page_size`, `max_results`, `max_requests`, `max_seconds`). It returns
+`SearchResult` with attributed canonical candidates, `next_page`, status, stop
+reasons, applied bounds and physical request count. See the
+[paper search contract](../research/papers/README.md#title-candidate-search).
+
+Complete, more and truncated searches return HTTP 200. Provider failures return
+HTTP 502 with the partial `SearchResult`, not a resolution error envelope. Invalid
+query/page yields 422 `invalid_search`; invalid bounds yield 422 `invalid_limits`;
+invalid transport shape/types yield 422 `invalid_request`. Cancellation propagates.
+Search does not choose a seed: submit the reviewed identifier to an existing resolve
+or outgoing graph endpoint. All search requests are read-only and unauthenticated.
+Tests can inject a separate `search_provider` into `create_app` or CLI `run`.

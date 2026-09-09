@@ -15,7 +15,14 @@ from research_bridge.knowledge_graph.application import (
     ExplorationLimits,
     ExploreOutgoing,
 )
-from research_bridge.research.papers.application import PaperProviderPort, ResolvePaper
+from research_bridge.research.papers.application import (
+    InvalidSearchError,
+    PaperProviderPort,
+    PaperSearchPort,
+    ResolvePaper,
+    SearchLimits,
+    SearchPapers,
+)
 from research_bridge.research.papers.application.errors import (
     PaperNotFoundError,
     ProviderMalformedResponseError,
@@ -32,12 +39,18 @@ def _json_default(value: object) -> str:
     raise TypeError(f"Unsupported JSON value: {type(value).__name__}")
 
 
-def run(argv: Sequence[str] | None = None, *, provider: PaperProviderPort | None = None) -> int:
+def run(
+    argv: Sequence[str] | None = None,
+    *,
+    provider: PaperProviderPort | None = None,
+    search_provider: PaperSearchPort | None = None,
+) -> int:
     """Run research commands with optional injected acquisition.
 
     Args:
         argv: Command arguments, defaulting to process arguments.
-        provider: Optional offline provider; otherwise compose OpenAlex.
+        provider: Optional offline lookup provider; otherwise compose OpenAlex.
+        search_provider: Optional offline title provider; otherwise compose OpenAlex.
 
     Returns:
         Exit code: 0 success, 2 invalid input, 3 missing seed, 4 upstream failure,
@@ -57,11 +70,32 @@ def run(argv: Sequence[str] | None = None, *, provider: PaperProviderPort | None
             f"--{name.replace('_', '-')}", type=int, default=getattr(defaults, name)
         )
     explore.add_argument("--max-seconds", type=float, default=defaults.max_seconds)
+    search = commands.add_parser(
+        "search", help="Review title candidates before choosing an identifier"
+    )
+    search.add_argument("query")
+    search.add_argument("--page", type=int, default=1)
+    search_defaults = SearchLimits()
+    for name in ("page_size", "max_results", "max_requests"):
+        search.add_argument(
+            f"--{name.replace('_', '-')}", type=int, default=getattr(search_defaults, name)
+        )
+    search.add_argument("--max-seconds", type=float, default=search_defaults.max_seconds)
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
         return 0
     try:
+        if args.command == "search":
+            search_limits = SearchLimits(
+                args.page_size, args.max_results, args.max_requests, args.max_seconds
+            )
+            searcher = SearchPapers(
+                search_provider if search_provider is not None else OpenAlexPaperAdapter()
+            )
+            result = asyncio.run(searcher.execute(args.query, search_limits, page=args.page))
+            print(json.dumps(asdict(result), default=_json_default, allow_nan=False))
+            return 4 if result.status == "failed" else 5 if result.status == "truncated" else 0
         acquisition = provider if provider is not None else OpenAlexPaperAdapter()
         if args.command == "resolve":
             record = asyncio.run(ResolvePaper(acquisition).execute(args.identifier))
@@ -93,6 +127,8 @@ def run(argv: Sequence[str] | None = None, *, provider: PaperProviderPort | None
     ) as exc:
         if isinstance(exc, InvalidIdentifierError):
             code, message, status = "invalid_identifier", "Unsupported or malformed identifier.", 2
+        elif isinstance(exc, InvalidSearchError):
+            code, message, status = "invalid_search", "Invalid title query or candidate page.", 2
         elif isinstance(exc, PaperNotFoundError):
             code, message, status = "not_found", "Paper not found.", 3
         elif isinstance(exc, ProviderRateLimitedError):

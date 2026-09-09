@@ -532,6 +532,153 @@
         "title": "ResolvedPaper",
         "type": "object"
       },
+      "SearchLimits": {
+        "description": "Validated search bounds, including replay of earlier candidate pages.\n\nAttributes:\n    page_size: Candidates per public page, from 1 to 100.\n    max_results: Unique candidates considered per search, from 1 to 500.\n    max_requests: Physical requests per call, from 1 to 100.\n    max_seconds: Finite elapsed allowance per call, greater than 0 up to 120.",
+        "properties": {
+          "max_requests": {
+            "default": 20,
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "max_results": {
+            "default": 100,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "default": 30.0,
+            "title": "Max Seconds",
+            "type": "number"
+          },
+          "page_size": {
+            "default": 10,
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "title": "SearchLimits",
+        "type": "object"
+      },
+      "SearchLimitsRequest": {
+        "additionalProperties": false,
+        "description": "Search budget types; application contracts validate numeric bounds.",
+        "properties": {
+          "max_requests": {
+            "default": 20,
+            "title": "Max Requests",
+            "type": "integer"
+          },
+          "max_results": {
+            "default": 100,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "max_seconds": {
+            "default": 30.0,
+            "title": "Max Seconds",
+            "type": "number"
+          },
+          "page_size": {
+            "default": 10,
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "title": "SearchLimitsRequest",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "additionalProperties": false,
+        "description": "Title text and one-based candidate page, without automatic seed selection.",
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/SearchLimitsRequest"
+          },
+          "page": {
+            "default": 1,
+            "title": "Page",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SearchResult": {
+        "description": "One deduplicated candidate page and truthful acquisition status.\n\nAttributes:\n    query: Normalized title query; no candidate is implicitly selected.\n    page: One-based requested page.\n    candidates: Available candidates on this page, each with evidence.\n    next_page: Next page only when more provider results can be reviewed.\n    status: Complete at provider end, more for pagination, truncated at a\n        limit or repeated cursor, or failed on an upstream error.\n    stop_reasons: Machine-readable reasons for incomplete acquisition.\n    limits: Applied bounds, including replay of prior pages.\n    requests: Physical requests consumed by this call.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedPaper"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/SearchLimits"
+          },
+          "next_page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Page"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "requests": {
+            "title": "Requests",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "complete",
+              "more",
+              "truncated",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stop Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "page",
+          "candidates",
+          "next_page",
+          "status",
+          "stop_reasons",
+          "limits",
+          "requests"
+        ],
+        "title": "SearchResult",
+        "type": "object"
+      },
       "Topic": {
         "description": "Provider-classified topic.\n\nAttributes:\n    id: Topic identifier (e.g., OpenAlex topic URL or ID).\n    display_name: Human readable topic name.\n    score: Provider-supplied relevance score, or ``None`` if not reported.\n    inference_status: Always ``INFERRED_PROVIDER`` for OpenAlex topics.\n    subfield: Optional subfield name if provider supplies it.\n    field: Optional field name if provider supplies it.\n    domain: Optional domain name if provider supplies it.",
         "properties": {
@@ -862,6 +1009,88 @@
           }
         },
         "summary": "Resolve Paper",
+        "tags": [
+          "research"
+        ]
+      }
+    },
+    "/v1/papers/search": {
+      "post": {
+        "description": "Review an attributed candidate page; select an identifier to resolve or explore.",
+        "operationId": "search_papers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Provider failure with partial candidates."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Search Papers",
         "tags": [
           "research"
         ]

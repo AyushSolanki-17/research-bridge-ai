@@ -10,7 +10,13 @@ from research_bridge.knowledge_graph.application import (
     ExplorationResult,
     ExploreOutgoing,
 )
-from research_bridge.research.papers.application import ResolvedPaper, ResolvePaper
+from research_bridge.research.papers.application import (
+    ResolvedPaper,
+    ResolvePaper,
+    SearchLimits,
+    SearchPapers,
+    SearchResult,
+)
 
 router = APIRouter(prefix="/v1", tags=["research"])
 _defaults = ExplorationLimits()
@@ -85,4 +91,50 @@ async def explore_outgoing(
     result = await explorer.execute(body.identifier, body.limits.to_application())
     if result.status == "failed":
         response.status_code = 404 if "seed_not_found" in result.stop_reasons else 502
+    return result
+
+
+class SearchLimitsRequest(BaseModel):
+    """Search budget types; application contracts validate numeric bounds."""
+
+    model_config = ConfigDict(extra="forbid")
+    page_size: StrictInt = SearchLimits().page_size
+    max_results: StrictInt = SearchLimits().max_results
+    max_requests: StrictInt = SearchLimits().max_requests
+    max_seconds: StrictFloat = SearchLimits().max_seconds
+
+
+class SearchRequest(BaseModel):
+    """Title text and one-based candidate page, without automatic seed selection."""
+
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=300)
+    page: StrictInt = 1
+    limits: SearchLimitsRequest = Field(default_factory=SearchLimitsRequest)
+
+
+def get_searcher(request: Request) -> SearchPapers:
+    """Return the title search use case composed by the application."""
+    return cast(SearchPapers, request.app.state.searcher)
+
+
+@router.post(
+    "/papers/search",
+    response_model=SearchResult,
+    operation_id="search_papers",
+    responses={
+        502: {"model": SearchResult, "description": "Provider failure with partial candidates."}
+    },
+)
+async def search_papers(
+    body: SearchRequest,
+    response: Response,
+    searcher: Annotated[SearchPapers, Depends(get_searcher)],
+) -> SearchResult:
+    """Review an attributed candidate page; select an identifier to resolve or explore."""
+    result = await searcher.execute(
+        body.query, SearchLimits(**body.limits.model_dump()), page=body.page
+    )
+    if result.status == "failed":
+        response.status_code = 502
     return result

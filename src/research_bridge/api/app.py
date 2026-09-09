@@ -9,20 +9,31 @@ from research_bridge.api.health import router as health_router
 from research_bridge.api.research import router as research_router
 from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
 from research_bridge.knowledge_graph.application import ExploreOutgoing
-from research_bridge.research.papers.application import PaperProviderPort, ResolvePaper
+from research_bridge.research.papers.application import (
+    PaperProviderPort,
+    PaperSearchPort,
+    ResolvePaper,
+    SearchPapers,
+)
 
 
-def create_app(provider: PaperProviderPort | None = None) -> FastAPI:
+def create_app(
+    provider: PaperProviderPort | None = None, *, search_provider: PaperSearchPort | None = None
+) -> FastAPI:
     """Compose research use cases and HTTP routes without acquiring data.
 
     Args:
-        provider: Optional provider for offline testing; defaults to OpenAlex.
+        provider: Optional lookup provider for offline testing; defaults to OpenAlex.
+        search_provider: Optional title search provider; defaults to OpenAlex.
 
     Returns:
         Application with health and versioned research routes.
     """
     app = FastAPI(title="Research Bridge API", version=__version__)
     acquisition = provider if provider is not None else OpenAlexPaperAdapter()
+    app.state.searcher = SearchPapers(
+        search_provider if search_provider is not None else OpenAlexPaperAdapter()
+    )
     app.state.resolver = ResolvePaper(acquisition)
     app.state.explorer = ExploreOutgoing(acquisition)
     for error_type in ERRORS:

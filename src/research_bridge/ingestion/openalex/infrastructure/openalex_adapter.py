@@ -27,6 +27,7 @@ from research_bridge.research.papers.application.errors import (
     ProviderTimeoutError,
 )
 from research_bridge.research.papers.application.ports import ResolvedPaper
+from research_bridge.research.papers.application.search_papers import CandidatePage
 from research_bridge.research.papers.domain.identifiers import Doi, OpenAlexWorkId
 from research_bridge.research.papers.domain.paper import (
     Author,
@@ -332,7 +333,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
 
 
 class OpenAlexPaperAdapter:
-    """HTTP adapter for OpenAlex singleton work lookup.
+    """HTTP adapter for OpenAlex work lookup and title candidate search.
 
     The adapter creates a client per call unless the caller supplies one.
     An injected client remains owned by the caller.
@@ -398,9 +399,73 @@ class OpenAlexPaperAdapter:
             client = httpx.AsyncClient(follow_redirects=True)
 
         try:
-            return await self._fetch_with_retries(client, url, headers, identifier, budget)
+            payload = await self._fetch_with_retries(client, url, headers, str(identifier), budget)
+            try:
+                return _translate_payload(payload, observed_at=datetime.now(UTC))
+            except ProviderMalformedResponseError:
+                raise
+            except Exception as exc:
+                raise ProviderMalformedResponseError("malformed work payload") from exc
         finally:
             if owns and client is not None:
+                await client.aclose()
+
+    async def search_titles(
+        self, query: str, *, cursor: str, page_size: int, budget: AcquisitionBudget
+    ) -> CandidatePage:
+        """Fetch title-only matches using the same bounded HTTP acquisition as lookup.
+
+        Args:
+            query: Application-validated title text.
+            cursor: Provider continuation, or '*' for the first page.
+            page_size: Requested record count, at most 100.
+            budget: Shared search allowance, including retries and redirects.
+
+        Returns:
+            Canonical works with attribution and the provider continuation.
+
+        Raises:
+            ProviderMalformedResponseError: For malformed list, cursor or work data.
+            AcquisitionLimitReached: When physical requests or elapsed time run out.
+            ProviderRateLimitedError: If rate limiting prevents acquisition.
+            ProviderTimeoutError: If a request times out.
+            ProviderRetryExhaustedError: If retry attempts are exhausted.
+            asyncio.CancelledError: If the operation is cancelled.
+        """
+        url = str(
+            httpx.URL(
+                f"{self._settings.base_url.rstrip('/')}/works",
+                params={
+                    "filter": f"title.search:{query}",
+                    "cursor": cursor,
+                    "per_page": str(page_size),
+                },
+            )
+        )
+        client = self._client or httpx.AsyncClient()
+        try:
+            payload = await self._fetch_with_retries(
+                client, url, self._build_auth(), "title search", budget
+            )
+            results, meta = payload.get("results"), payload.get("meta")
+            if not isinstance(results, list) or not isinstance(meta, dict):
+                raise ProviderMalformedResponseError("expected search results and metadata")
+            if "next_cursor" not in meta:
+                raise ProviderMalformedResponseError("missing search continuation")
+            continuation = meta["next_cursor"]
+            if continuation is not None and (
+                not isinstance(continuation, str) or not continuation or len(continuation) > 4096
+            ):
+                raise ProviderMalformedResponseError("invalid search continuation")
+            if len(results) > page_size or any(not isinstance(item, dict) for item in results):
+                raise ProviderMalformedResponseError("invalid search records")
+            observed_at = datetime.now(UTC)
+            return CandidatePage(
+                tuple(_translate_payload(item, observed_at=observed_at) for item in results),
+                continuation,
+            )
+        finally:
+            if self._owns_client:
                 await client.aclose()
 
     async def _fetch_with_retries(
@@ -408,9 +473,9 @@ class OpenAlexPaperAdapter:
         client: httpx.AsyncClient,
         url: str,
         headers: dict[str, str],
-        identifier: Doi | OpenAlexWorkId,
+        identifier: str,
         budget: AcquisitionBudget | None,
-    ) -> ResolvedPaper:
+    ) -> dict[str, Any]:
         max_retries = self._settings.max_retries
         timeout = self._settings.timeout_seconds
         last_exc: Exception | None = None
@@ -520,16 +585,7 @@ class OpenAlexPaperAdapter:
             if not isinstance(payload, dict):
                 raise ProviderMalformedResponseError("expected JSON object for work")
 
-            # Detect missing work encoded as JSON error instead of 404 (some providers)
-            # OpenAlex returns JSON with error field on 404 already handled.
-
-            observed_at = datetime.now(UTC)
-            try:
-                return _translate_payload(payload, observed_at=observed_at)
-            except ProviderMalformedResponseError:
-                raise
-            except Exception as exc:
-                raise ProviderMalformedResponseError("malformed work payload") from exc
+            return payload
 
         # Should not reach here; raise retries exhausted
         raise ProviderRetryExhaustedError(

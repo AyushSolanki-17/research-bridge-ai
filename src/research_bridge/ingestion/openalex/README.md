@@ -90,3 +90,19 @@ The adapter distinguishes:
 Provider JSON never becomes a canonical model.
 
 Follow [architecture](../../../../docs/architecture.md).
+
+## Title search (checked 2026-09-09)
+
+Official [search documentation](https://help.openalex.org/api/searching/) documents
+`GET /works?filter=title.search:TEXT` for title-only matching. This field-search
+syntax remains supported but is deprecated; the recommended general `search`
+parameter also searches abstracts/full text and therefore does not meet title-only
+semantics. This adapter deliberately retains the documented title-specific operation.
+Provider stemming and search syntax apply; results need explicit caller review.
+
+The [pagination contract](https://help.openalex.org/api/paging/) supports `cursor=*`,
+`meta.next_cursor` and `per_page` up to 100. Search follows opaque cursors, treats
+null as end, and fails on missing/malformed pagination metadata or malformed work
+identities. It reuses singleton metadata translation and physical HTTP accounting.
+Search credentials, retry settings and data attribution follow the configuration above.
+No live search request was made during verification.
