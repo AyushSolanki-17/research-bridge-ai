@@ -136,9 +136,18 @@ class ExplorationResult:
 
 
 class ExplorationCancelled(asyncio.CancelledError):
-    """Cancellation retaining acquired evidence in the result attribute."""
+    """Cancellation retaining acquired evidence.
+
+    Attributes:
+        result: Failed partial graph with the cancellation stop reason.
+    """
 
     def __init__(self, result: ExplorationResult) -> None:
+        """Attach the graph acquired before cancellation.
+
+        Args:
+            result: Partial exploration outcome retained for caller inspection.
+        """
         super().__init__("citation exploration cancelled")
         self.result = result
 
@@ -153,7 +162,12 @@ class ExploreOutgoing:
     def __init__(
         self, provider: PaperProviderPort, *, clock: Callable[[], float] = time.monotonic
     ) -> None:
-        """Inject a budget-aware provider and monotonic clock."""
+        """Compose exploration without acquiring data.
+
+        Args:
+            provider: Acquisition boundary accounting for every physical request.
+            clock: Monotonic seconds source, injectable for deterministic tests.
+        """
         self._provider = provider
         self._clock = clock
 

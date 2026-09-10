@@ -7,7 +7,7 @@ Identity semantics:
   - Paper record: ``openalex:work:<work-id>`` where ``<work-id>`` is the
     normalized OpenAlex work ID (e.g., ``W2741809807``).
   - Citation assertion: ``openalex:citation:<citing-id>:<referenced-id>``
-    (reserved for citation graph, same stability rule).
+    (used by citation exploration, with the same stability rule).
 
 Two evidence records with the same stable ``id`` but different
 ``observed_at`` values refer to the same logical assertion observed at

@@ -13,6 +13,11 @@ class AcquisitionLimitReached(RuntimeError):
     """
 
     def __init__(self, reason: str) -> None:
+        """Record why acquisition stopped.
+
+        Args:
+            reason: Machine-readable budget stop reason.
+        """
         super().__init__(reason)
         self.reason = reason
 
@@ -58,20 +63,38 @@ class AcquisitionBudget:
         return max(0.0, self._clock() - self._started)
 
     def remaining_seconds(self) -> float:
-        """Return remaining time or raise AcquisitionLimitReached at the deadline."""
+        """Return the elapsed-time allowance remaining.
+
+        Returns:
+            Positive seconds available before the operation deadline.
+
+        Raises:
+            AcquisitionLimitReached: If the elapsed deadline has been reached.
+        """
         remaining = self._max_seconds - self.elapsed
         if remaining <= 0:
             raise AcquisitionLimitReached("elapsed_time")
         return remaining
 
     def consume_request(self) -> None:
-        """Reserve one physical request or raise AcquisitionLimitReached."""
+        """Reserve one physical request before acquisition starts.
+
+        Raises:
+            AcquisitionLimitReached: If request or elapsed-time allowance is exhausted.
+        """
         self.remaining_seconds()
         if self._requests >= self._max_requests:
             raise AcquisitionLimitReached("requests")
         self._requests += 1
 
     def check_wait(self, seconds: float) -> None:
-        """Reject a wait that cannot finish before the operation deadline."""
+        """Reject a wait that cannot finish before the operation deadline.
+
+        Args:
+            seconds: Proposed nonnegative wait duration.
+
+        Raises:
+            AcquisitionLimitReached: If the wait reaches or exceeds the deadline.
+        """
         if seconds >= self.remaining_seconds():
             raise AcquisitionLimitReached("elapsed_time")

@@ -52,8 +52,9 @@ Keep query and limits unchanged while following `next_page`.
 `next_page` is null for complete, failed and truncated results. For a budget stop,
 retry the same page with larger limits within hard maxima. Cancellation propagates
 without more requests; partial candidates are not returned on cancellation.
-The monotonic clock is injectable for deterministic tests. Repeated cursors stop
-immediately; changing cursors with repeated/empty records still stop at budgets.
+The application cancels a pending provider page at the elapsed deadline and
+retains candidates from earlier pages. The monotonic clock is injectable for
+deterministic tests. Repeated cursors stop immediately; changing cursors with repeated/empty records still stop at budgets.
 No snapshot is stored: provider changes between calls can shift page membership.
 Clients reviewing changing results should also track identifiers already seen.
 

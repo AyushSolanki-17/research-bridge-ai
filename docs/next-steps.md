@@ -155,6 +155,10 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** `knowledge_graph`, `ingestion/openalex`.
 
+   **Assignee:** Unassigned. **Status:** ready for implementation.
+   Prerequisite capabilities are implemented. This document and the linked local
+   product, architecture and capability guidance provide the implementation handoff.
+
    **After this task:** A caller can explore papers citing the seed, papers the seed cites, or both, while retaining correct citation direction and shared limits.
 
    **Deliverable:** provider-backed incoming citation lookup and `incoming`, `outgoing` and `both` exploration modes across the supported 1–3 hops.
@@ -206,3 +210,29 @@ The deliverable is seed → bounded citation graph → evidence through the libr
    **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
 
 Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; incoming exploration, filters and complete-journey verification are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
+
+
+## Implementation and developer-experience review
+
+**Assignee:** Codex. **Status:** verified (2026-09-10).
+
+Reviewed the implemented identifier resolution, title search, outgoing exploration,
+provider translation, attribution and transport boundaries. Fixed application-level
+search deadlines for stalled providers, oversized optional topic scores failing
+translation, and incomplete abstract positions being joined into misleading text.
+Regression coverage includes lookup and search translation, deadline cancellation,
+and retention of candidates acquired before the deadline. Google-style constructor,
+budget and cancellation docstrings now clarify dependencies, side effects and errors;
+stale capability and test guidance was corrected.
+
+Validation: `uv run ruff check .`, `uv run ruff format --check .`,
+`uv run --extra server mypy`, `uv run --extra server pytest -q` (146 passed),
+`uv run --extra server python scripts/export_openapi.py --check` and `uv build`
+passed. A clean wheel installation without FastAPI completed offline title search,
+explicit selection and outgoing exploration; installed CLI help passed. Reviewed
+the diff, wheel/sdist member paths and changed Markdown file-link targets.
+The HTTP schema is unchanged and no migration is needed. Gapped abstracts now
+remain unknown rather than exposing incomplete text as a reconstructed abstract.
+Two existing dependency deprecation warnings remain. Live-provider acquisition and
+Docker were not tested in this review. Incoming/combined exploration remains next;
+filters and complete-journey verification remain unimplemented.

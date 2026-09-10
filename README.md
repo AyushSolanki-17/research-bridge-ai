@@ -65,7 +65,7 @@ Review `candidates` using their titles, authors, dates and venues. Choose the in
 candidate's `paper.identifiers.openalex_id.value`, then pass that identifier to
 `research-bridge explore IDENTIFIER` or `POST /v1/graphs/outgoing`. No candidate is
 automatically selected. Invalid selections follow existing identifier error behavior.
-An empty search is successful and returns no candidates.
+A valid query with no matches succeeds with no candidates. Blank queries are rejected.
 
 ```python
 import asyncio
