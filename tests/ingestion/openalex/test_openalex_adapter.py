@@ -381,3 +381,32 @@ def test_topic_score_not_zero_when_missing() -> None:
             assert res.paper.topics[0].inference_status.value == "inferred_provider"
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("index", [{"before": [0], "after": [2]}, {"after": [1]}, {"": [0]}])
+def test_incomplete_abstract_is_not_presented_as_full_text(index: dict) -> None:
+    """Missing positions and empty tokens cannot produce a trustworthy abstract."""
+    assert reconstruct_abstract(index) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("search", [False, True])
+async def test_oversized_topic_score_preserves_other_metadata(search: bool) -> None:
+    """Invalid optional scores do not fail either lookup or candidate search."""
+    from research_bridge.research.papers.application import AcquisitionBudget
+
+    work = {"id": "https://openalex.org/W1", "title": "Synthetic", "topics": [{"score": 10**400}]}
+    payload = {"results": [work], "meta": {"next_cursor": None}} if search else work
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=payload))
+    ) as client:
+        adapter = OpenAlexPaperAdapter(OpenAlexSettings(), client)
+        if search:
+            page = await adapter.search_titles(
+                "Synthetic", cursor="*", page_size=1, budget=AcquisitionBudget(1, 30)
+            )
+            result = page.candidates[0]
+        else:
+            result = await adapter.fetch_paper(OpenAlexWorkId("W1"))
+    assert result.paper.title == "Synthetic"
+    assert result.paper.topics[0].score is None

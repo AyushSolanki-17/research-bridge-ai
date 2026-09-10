@@ -45,7 +45,9 @@ def reconstruct_abstract(inverted_index: Any) -> str | None:
         inverted_index: Provider value for ``abstract_inverted_index``.
 
     Returns:
-        Reconstructed abstract or ``None`` if the index is missing or invalid.
+        Reconstructed abstract, or None for missing, empty or invalid indexes.
+        Tokens must be nonempty and positions must be unique and contiguous from zero;
+        incomplete text is not joined across missing positions.
     """
     if inverted_index is None:
         return None
@@ -53,10 +55,9 @@ def reconstruct_abstract(inverted_index: Any) -> str | None:
         return None
     if not inverted_index:
         return None
-    # Validate shape: dict[str, list[int]]
     positions: list[tuple[int, str]] = []
     for word, indices in inverted_index.items():
-        if not isinstance(word, str):
+        if not isinstance(word, str) or not word.strip():
             return None
         if not isinstance(indices, list):
             return None
@@ -66,16 +67,16 @@ def reconstruct_abstract(inverted_index: Any) -> str | None:
             positions.append((pos, word))
     if not positions:
         return None
-    # Check for duplicate positions which would indicate malformed index.
-    # If duplicates exist, treat as malformed -> None (conservative).
+    # Multiple words at the same position cannot be reconstructed faithfully.
     seen: set[int] = set()
     for pos, _ in positions:
         if pos in seen:
             return None
         seen.add(pos)
     positions.sort(key=lambda x: x[0])
-    # Ensure contiguous from 0? OpenAlex may have gaps if truncated, but we still
-    # join what we have; gaps just produce joined words.
+    # Joining across missing words could change the meaning of the source text.
+    if any(pos != expected for expected, (pos, _) in enumerate(positions)):
+        return None
     words = [word for _, word in positions]
     return " ".join(words)
 
@@ -108,10 +109,7 @@ def _parse_topics(raw: Any) -> tuple[Topic, ...]:
         # Never coerce unknown to zero.
         score_f = (
             float(score)
-            if isinstance(score, (int, float))
-            and not isinstance(score, bool)
-            and math.isfinite(score)
-            and 0 <= score <= 1
+            if isinstance(score, (int, float)) and not isinstance(score, bool) and 0 <= score <= 1
             else None
         )
         # Subfield/field/domain may be nested dicts or strings.
@@ -344,6 +342,15 @@ class OpenAlexPaperAdapter:
         settings: OpenAlexSettings | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> None:
+        """Configure acquisition without opening a network connection.
+
+        Args:
+            settings: Validated provider configuration; defaults to environment values.
+            client: Optional caller-owned client, which remains open after acquisition.
+
+        Raises:
+            ValueError: If environment configuration is invalid.
+        """
         self._settings = settings or OpenAlexSettings.from_env()
         self._client = client
         self._owns_client = client is None
@@ -358,7 +365,7 @@ class OpenAlexPaperAdapter:
         return f"{base}/works/{identifier.value}"
 
     def _build_auth(self) -> dict[str, str]:
-        """Headers or params for auth without leaking key into logs."""
+        """Return authentication headers to keep credentials out of query strings."""
         if not self._settings.api_key:
             return {}
         # Prefer header auth to avoid key in URL logs.
@@ -381,6 +388,7 @@ class OpenAlexPaperAdapter:
             Translated paper and stable source evidence.
 
         Raises:
+            AcquisitionLimitReached: If the shared operation budget is exhausted.
             PaperNotFoundError: If the provider returns 404.
             ProviderRateLimitedError: If the provider signals 429.
             ProviderTimeoutError: On timeout.
@@ -390,7 +398,6 @@ class OpenAlexPaperAdapter:
         """
         url = self._build_url(identifier)
         headers = self._build_auth()
-        # Add mailto for polite pool if available; not required.
         headers.setdefault("Accept", "application/json")
 
         client = self._client

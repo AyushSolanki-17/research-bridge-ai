@@ -13,6 +13,11 @@ class ResolvePaper:
     """
 
     def __init__(self, provider: PaperProviderPort) -> None:
+        """Compose identifier resolution without acquiring data.
+
+        Args:
+            provider: Acquisition boundary returning canonical papers and evidence.
+        """
         self._provider = provider
 
     async def execute(self, raw_identifier: str) -> ResolvedPaper:

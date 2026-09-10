@@ -1,5 +1,6 @@
 """Bounded title candidate search with explicit caller selection."""
 
+import asyncio
 import math
 import time
 from collections.abc import Callable
@@ -126,7 +127,12 @@ class SearchPapers:
     def __init__(
         self, provider: PaperSearchPort, *, clock: Callable[[], float] = time.monotonic
     ) -> None:
-        """Compose acquisition and an optionally controlled monotonic clock."""
+        """Compose the search dependencies without acquiring data.
+
+        Args:
+            provider: Candidate acquisition that accounts for physical requests.
+            clock: Monotonic seconds source, injectable for deterministic tests.
+        """
         self._provider = provider
         self._clock = clock
 
@@ -144,6 +150,7 @@ class SearchPapers:
         Returns:
             Attributed candidates, pagination and explicit partial-result status.
             Empty matches or a page beyond provider end return complete with no candidates.
+            The elapsed deadline cancels a pending page and retains earlier candidates.
 
         Raises:
             InvalidSearchError: For invalid title text or page, before acquisition.
@@ -168,14 +175,19 @@ class SearchPapers:
         next_page = None
         try:
             while True:
-                budget.remaining_seconds()
                 cursors.add(cursor)
-                batch = await self._provider.search_titles(
-                    query,
-                    cursor=cursor,
-                    page_size=min(limits.page_size, end - len(records)),
-                    budget=budget,
-                )
+                try:
+                    async with asyncio.timeout(budget.remaining_seconds()):
+                        batch = await self._provider.search_titles(
+                            query,
+                            cursor=cursor,
+                            page_size=min(limits.page_size, end - len(records)),
+                            budget=budget,
+                        )
+                except TimeoutError as exc:
+                    if isinstance(exc, ProviderTimeoutError):
+                        raise
+                    raise AcquisitionLimitReached("elapsed_time") from exc
                 budget.remaining_seconds()
                 if len(batch.candidates) > min(limits.page_size, end - len(records)):
                     raise ProviderMalformedResponseError("provider exceeded requested page size")

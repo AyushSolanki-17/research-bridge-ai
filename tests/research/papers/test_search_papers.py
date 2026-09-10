@@ -310,3 +310,42 @@ def test_injected_cli_search_ignores_unused_openalex_settings(
     provider = SearchProvider([CandidatePage((), None)])
     assert run(["search", "Synthetic"], search_provider=provider) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "complete"
+
+
+@pytest.mark.asyncio
+async def test_stalled_provider_is_cancelled_at_search_deadline() -> None:
+    """A blocked page is cancelled while previously acquired candidates survive."""
+
+    class StalledProvider(SearchProvider):
+        """Return one page, then block until the application cancels acquisition."""
+
+        async def search_titles(
+            self, query: str, *, cursor: str, page_size: int, budget: AcquisitionBudget
+        ) -> CandidatePage:
+            """Acquire the first page or wait indefinitely on the next cursor."""
+            if cursor == "*":
+                return await super().search_titles(
+                    query, cursor=cursor, page_size=page_size, budget=budget
+                )
+            budget.consume_request()
+            self.calls.append(cursor)
+            await asyncio.Event().wait()
+            raise AssertionError("Cancelled acquisition must not resume")
+
+    # A controlled timeout context converts only its own cancellation to TimeoutError.
+    from unittest.mock import patch
+
+    real_timeout = asyncio.timeout
+
+    def deadline(seconds: float) -> asyncio.Timeout:
+        """Expire the blocked page on the next event-loop turn without sleeping."""
+        return real_timeout(None if provider.calls == [] else 0)
+
+    provider = StalledProvider([CandidatePage((record("W1"),), "1")])
+    with patch("asyncio.timeout", deadline):
+        # Fail promptly if the use case loses its deadline guard.
+        result = await asyncio.wait_for(SearchPapers(provider).execute("Shared"), timeout=1)
+    assert result.status == "truncated"
+    assert result.stop_reasons == ("elapsed_time",)
+    assert result.candidates == (record("W1"),)
+    assert provider.calls == ["*", "1"]
