@@ -58,7 +58,8 @@ waits are capped by its remaining elapsed allowance. Budget exhaustion raises
   ``null`` becomes ``None``.
 - Abstracts are reconstructed only from a valid
   ``abstract_inverted_index`` (``dict[str, list[int]]`` with non-negative
-  ints and no duplicate positions). Invalid or missing indexes yield
+  ints, nonempty tokens and unique, contiguous positions starting at zero).
+  Gapped, invalid or missing indexes yield
   ``None`` and never a synthetic abstract.
 - Topics keep the provider-supplied ``score`` unchanged and are marked
   ``InferenceStatus.INFERRED_PROVIDER``. A missing score stays ``None`` and
