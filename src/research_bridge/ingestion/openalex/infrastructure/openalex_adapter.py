@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from research_bridge.ingestion.openalex.infrastructure.settings import OpenAlexSettings
+from research_bridge.knowledge_graph.application import IncomingPage
 from research_bridge.provenance.domain.evidence import Evidence, InferenceStatus
 from research_bridge.research.papers.application.acquisition import AcquisitionBudget
 from research_bridge.research.papers.application.errors import (
@@ -331,7 +332,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
 
 
 class OpenAlexPaperAdapter:
-    """HTTP adapter for OpenAlex work lookup and title candidate search.
+    """HTTP adapter for work lookup, title search and incoming citation pages.
 
     The adapter creates a client per call unless the caller supplies one.
     An injected client remains owned by the caller.
@@ -439,11 +440,50 @@ class OpenAlexPaperAdapter:
             ProviderRetryExhaustedError: If retry attempts are exhausted.
             asyncio.CancelledError: If the operation is cancelled.
         """
+        works, next_cursor = await self._fetch_work_page(
+            f"title.search:{query}", cursor=cursor, page_size=page_size, budget=budget
+        )
+        return CandidatePage(works, next_cursor)
+
+    async def fetch_incoming(
+        self, target: OpenAlexWorkId, *, cursor: str, page_size: int, budget: AcquisitionBudget
+    ) -> IncomingPage:
+        """Fetch works citing a target through OpenAlex's cites filter.
+
+        Args:
+            target: Normalized referenced work identifier.
+            cursor: Opaque provider continuation, or '*' to begin.
+            page_size: Maximum records requested, from 1 through 100.
+            budget: Shared allowance for all directions, pages and retries.
+
+        Returns:
+            Attributed citing records and the next provider cursor.
+
+        Raises:
+            ProviderMalformedResponseError: For invalid page or work data.
+            AcquisitionLimitReached: If the shared acquisition allowance runs out.
+            ProviderRateLimitedError: If rate limiting prevents acquisition.
+            ProviderTimeoutError: If a request times out.
+            ProviderRetryExhaustedError: If finite retries fail.
+            ValueError: If page size is outside the provider bounds.
+            asyncio.CancelledError: If cancelled; no further requests are made.
+        """
+        works, next_cursor = await self._fetch_work_page(
+            f"cites:{target.value}", cursor=cursor, page_size=page_size, budget=budget
+        )
+        return IncomingPage(works, next_cursor)
+
+    async def _fetch_work_page(
+        self, query_filter: str, *, cursor: str, page_size: int, budget: AcquisitionBudget
+    ) -> tuple[tuple[ResolvedPaper, ...], str | None]:
+        """Translate a bounded filtered page for search and citation acquisition."""
+        if type(page_size) is not int or not 1 <= page_size <= 100:
+            raise ValueError("page_size must be an integer from 1 through 100")
         url = str(
             httpx.URL(
                 f"{self._settings.base_url.rstrip('/')}/works",
                 params={
-                    "filter": f"title.search:{query}",
+                    "filter": query_filter,
                     "cursor": cursor,
                     "per_page": str(page_size),
                 },
@@ -452,7 +492,7 @@ class OpenAlexPaperAdapter:
         client = self._client or httpx.AsyncClient()
         try:
             payload = await self._fetch_with_retries(
-                client, url, self._build_auth(), "title search", budget
+                client, url, self._build_auth(), "filtered works", budget
             )
             results, meta = payload.get("results"), payload.get("meta")
             if not isinstance(results, list) or not isinstance(meta, dict):
@@ -467,7 +507,7 @@ class OpenAlexPaperAdapter:
             if len(results) > page_size or any(not isinstance(item, dict) for item in results):
                 raise ProviderMalformedResponseError("invalid search records")
             observed_at = datetime.now(UTC)
-            return CandidatePage(
+            return (
                 tuple(_translate_payload(item, observed_at=observed_at) for item in results),
                 continuation,
             )

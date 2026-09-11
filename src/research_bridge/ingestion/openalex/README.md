@@ -107,3 +107,17 @@ null as end, and fails on missing/malformed pagination metadata or malformed wor
 identities. It reuses singleton metadata translation and physical HTTP accounting.
 Search credentials, retry settings and data attribution follow the configuration above.
 No live search request was made during verification.
+
+## Incoming citation pages (checked 2026-09-10)
+
+The official [citation recipes](https://help.openalex.org/how-to/api-recipes/)
+document `GET /works?filter=cites:W…`. The adapter implements this through
+`fetch_incoming`, using the same filtered-page translation and bounded acquisition
+as title search. It follows opaque cursors under the documented
+[pagination contract](https://help.openalex.org/api/paging/), starting at `*`,
+requesting at most 100 records and ending at a null continuation. Provider order
+is preserved. Metadata and evidence use the existing singleton translator.
+Knowledge graph verifies each citing record's reference assertion and controls
+deduplication, repeated cursors and shared exploration limits. Incoming pages reuse
+the same credentials, timeout, redirect and retry policy. Verification is offline;
+live incoming acquisition has not been tested.

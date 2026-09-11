@@ -12,8 +12,11 @@ from research_bridge import __version__
 from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
 from research_bridge.knowledge_graph.application import (
     ExplorationCancelled,
+    ExplorationFilters,
     ExplorationLimits,
-    ExploreOutgoing,
+    ExploreCitations,
+    IncomingCitationPort,
+    InvalidFilterError,
 )
 from research_bridge.research.papers.application import (
     InvalidSearchError,
@@ -44,6 +47,7 @@ def run(
     *,
     provider: PaperProviderPort | None = None,
     search_provider: PaperSearchPort | None = None,
+    incoming_provider: IncomingCitationPort | None = None,
 ) -> int:
     """Run research commands with optional injected acquisition.
 
@@ -51,6 +55,7 @@ def run(
         argv: Command arguments, defaulting to process arguments.
         provider: Optional offline lookup provider; otherwise compose OpenAlex.
         search_provider: Optional offline title provider; otherwise compose OpenAlex.
+        incoming_provider: Optional incoming boundary; otherwise use lookup if supported.
 
     Returns:
         Exit code: 0 success, 2 invalid input, 3 missing seed, 4 upstream failure,
@@ -62,14 +67,19 @@ def run(
     commands = parser.add_subparsers(dest="command")
     resolve = commands.add_parser("resolve", help="Resolve a DOI or OpenAlex work identifier")
     resolve.add_argument("identifier")
-    explore = commands.add_parser("explore", help="Explore outgoing citations within limits")
+    explore = commands.add_parser("explore", help="Explore citations within shared limits")
     explore.add_argument("identifier")
+    explore.add_argument("--mode", choices=("outgoing", "incoming", "both"), default="outgoing")
     defaults = ExplorationLimits()
     for name in ("depth", "max_nodes", "max_edges", "max_requests"):
         explore.add_argument(
             f"--{name.replace('_', '-')}", type=int, default=getattr(defaults, name)
         )
     explore.add_argument("--max-seconds", type=float, default=defaults.max_seconds)
+    for name in ("year_from", "year_to", "min_citations", "max_citations"):
+        explore.add_argument(f"--{name.replace('_', '-')}", type=int)
+    for name in ("author", "venue", "topic"):
+        explore.add_argument(f"--{name}", help="Exact display name, ignoring case and whitespace")
     search = commands.add_parser(
         "search", help="Review title candidates before choosing an identifier"
     )
@@ -104,7 +114,25 @@ def run(
         limits = ExplorationLimits(
             args.depth, args.max_nodes, args.max_edges, args.max_requests, args.max_seconds
         )
-        graph = asyncio.run(ExploreOutgoing(acquisition).execute(args.identifier, limits))
+        filter_values = {
+            name: getattr(args, name)
+            for name in (
+                "year_from",
+                "year_to",
+                "min_citations",
+                "max_citations",
+                "author",
+                "venue",
+                "topic",
+            )
+            if getattr(args, name) is not None
+        }
+        filters = ExplorationFilters(**filter_values) if filter_values else None
+        graph = asyncio.run(
+            ExploreCitations(acquisition, incoming_provider=incoming_provider).execute(
+                args.identifier, limits, mode=args.mode, filters=filters
+            )
+        )
         print(json.dumps(asdict(graph), default=_json_default, allow_nan=False))
         if graph.status == "truncated":
             return 5
@@ -127,6 +155,8 @@ def run(
     ) as exc:
         if isinstance(exc, InvalidIdentifierError):
             code, message, status = "invalid_identifier", "Unsupported or malformed identifier.", 2
+        elif isinstance(exc, InvalidFilterError):
+            code, message, status = "invalid_filters", "Invalid metadata filter values.", 2
         elif isinstance(exc, InvalidSearchError):
             code, message, status = "invalid_search", "Invalid title query or candidate page.", 2
         elif isinstance(exc, PaperNotFoundError):
@@ -142,7 +172,7 @@ def run(
         else:
             code, message, status = (
                 "invalid_configuration",
-                "Invalid limits or provider settings.",
+                "Invalid filters, limits or provider settings.",
                 2,
             )
         print(json.dumps({"error": {"code": code, "message": message}}), file=sys.stderr)

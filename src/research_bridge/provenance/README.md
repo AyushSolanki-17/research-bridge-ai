@@ -11,7 +11,7 @@ Observation time is recorded but never changes the stable identifier.
 - Paper record: ``openalex:work:<work-id>`` where ``<work-id>`` is the
   normalized OpenAlex work ID (e.g., ``W2741809807``).
 - Citation assertion: ``openalex:citation:<citing-id>:<referenced-id>``
-  (used by outgoing citation exploration).
+  (shared by outgoing, incoming and combined citation exploration).
 
 Two observations of the same work at different ``observed_at`` times share
 the same ``id``. Serialized form via ``Evidence.to_dict()`` round-trips
@@ -33,3 +33,10 @@ Each ``Evidence`` preserves:
 identity helpers do not acquire citations or implement graph exploration.
 
 Follow [architecture](../../../docs/architecture.md).
+
+Filtered graph responses retain the original paper and citation evidence values.
+Inspect `nodes[].evidence` and `edges[].evidence` in HTTP/CLI JSON; match a citation's
+`source` and `target` to retained node identifiers. `referenced_id` preserves the
+original assertion even when its target was merged. Source URLs identify live
+provider records, whose contents may change after `observed_at`; no historical
+payload archive is implied. See the [inspection examples](../../../README.md#filter-results-and-inspect-evidence).

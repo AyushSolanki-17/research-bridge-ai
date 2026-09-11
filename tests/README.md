@@ -3,7 +3,8 @@
 Run the commands in [README](../README.md). The normal suite is offline and needs
 no credentials. It covers identifier normalization, canonical metadata and evidence,
 OpenAlex translation and bounded acquisition, title pagination and explicit selection,
-outgoing traversal, and matching library/HTTP/CLI journeys. API health, schema drift,
+outgoing/incoming/combined traversal, metadata filters and paper/source inspection,
+and matching library/HTTP/CLI journeys. API health, schema drift,
 side-effect-free library imports and static inward dependency rules are also checked.
 
 For focused development, run the relevant capability tests, for example:

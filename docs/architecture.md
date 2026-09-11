@@ -4,6 +4,14 @@ Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoi
 
 ## Source layout
 
+Incoming and combined exploration reuse the same `ExploreCitations` state and
+budgets as outgoing exploration (`ExploreOutgoing` remains a compatible alias).
+Knowledge graph owns `IncomingCitationPort` and `IncomingPage`, implemented by
+the OpenAlex adapter with cursor acquisition. Incoming edges require explicit
+references in the citing record; missing or contradictory assertions fail with
+partial data. HTTP exposes modes through `/v1/graphs/explore`; CLI uses `--mode`.
+No database, additional dependency or persistent pagination session is needed.
+
 ```text
 src/research_bridge/
   research/papers/
@@ -78,3 +86,13 @@ Research may depend on stable provenance value types. Knowledge graph may depend
 ## First implementation
 
 Follow [next steps](next-steps.md) for the seed resolution and bounded citation explorer milestone and [coding style](coding-style.md) for OOP and design guidance.
+
+## Result filtering and evidence inspection
+
+Knowledge graph application owns `ExplorationFilters`: validated metadata predicates
+on canonical papers, composed directly into exploration result construction. Filtering
+runs after traversal, retaining the seed and edges between retained papers. Acquisition
+status, shared budgets and pre-filter counts remain explicit. HTTP schemas and CLI flags
+construct the same predicate contract; neither transport duplicates matching rules.
+Existing paper and evidence values supply inspection data without another provider port,
+server-side session, persisted graph or duplicated metadata model.

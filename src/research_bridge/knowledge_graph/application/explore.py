@@ -1,4 +1,6 @@
-"""Deterministic, bounded outgoing citation exploration."""
+"""Deterministic, bounded citation exploration in either or both directions."""
+
+from __future__ import annotations
 
 import asyncio
 import math
@@ -8,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Literal
 
+from research_bridge.knowledge_graph.application.filters import ExplorationFilters
+from research_bridge.knowledge_graph.application.incoming import IncomingCitationPort
 from research_bridge.provenance.domain.evidence import Evidence, InferenceStatus
 from research_bridge.research.papers.application import (
     AcquisitionBudget,
@@ -24,10 +28,30 @@ from research_bridge.research.papers.application.errors import (
 )
 from research_bridge.research.papers.domain.identifiers import OpenAlexWorkId, parse_identifier
 
+ExplorationMode = Literal["outgoing", "incoming", "both"]
+
+
+def _citation(record: ResolvedPaper, target: OpenAlexWorkId) -> CitationEdge:
+    """Preserve the citing record's explicit reference assertion and attribution."""
+    evidence = record.evidence
+    return CitationEdge(
+        record.paper.identifiers.openalex_id,
+        target,
+        target,
+        Evidence(
+            id=f"{evidence.provider}:citation:{evidence.provider_record_id}:{target.value}",
+            provider=evidence.provider,
+            provider_record_id=evidence.provider_record_id,
+            source_url=evidence.source_url,
+            observed_at=evidence.observed_at,
+            inference_status=InferenceStatus.REPORTED,
+        ),
+    )
+
 
 @dataclass(frozen=True)
 class ExplorationLimits:
-    """Validated bounds for one outgoing neighborhood.
+    """Validated bounds shared by all directions in one neighborhood.
 
     Attributes:
         depth: Citation hops, from 1 through 3; seed is at depth zero.
@@ -107,20 +131,41 @@ class MetadataGap:
 
 
 @dataclass(frozen=True)
+class IncomingPageGap:
+    """An incoming page that was not fully processed.
+
+    Attributes:
+        target: Referenced work whose citing neighborhood remains incomplete.
+        cursor: Provider page that failed or was only partially processed.
+        reason: Budget limit, repeated cursor, provider failure or cancellation.
+    """
+
+    target: OpenAlexWorkId
+    cursor: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class ExplorationResult:
     """Immutable acquired neighborhood and explicit completion evidence.
 
     Attributes:
         seed: Resolved seed identity, or None if acquisition failed.
-        nodes: Unique acquired papers in breadth-first discovery order.
+        nodes: Retained papers in breadth-first discovery order; seed is always retained.
         edges: Unique directed citations in stable traversal order.
         unresolved: References that could not be acquired.
-        incomplete_metadata: Missing fields on acquired records.
+        incomplete_metadata: Missing fields on retained records.
         status: Complete within scope, truncated, or failed acquisition.
         stop_reasons: Machine-readable explanations, empty for complete results.
         limits: Applied validated bounds.
         requests: Physical provider requests consumed, including seed and retries.
         elapsed_seconds: Monotonic operation duration.
+        mode: Direction followed during discovery; edges always mean citing to cited.
+        unread_incoming_pages: Incoming pages interrupted during acquisition or processing.
+        filters: Normalized predicates, or None for the original unfiltered result.
+        filter_scope: Filters affect returned results within the bounded neighborhood.
+        acquired_nodes: Paper count before filtering, including the seed.
+        acquired_edges: Citation count before filtering, including unresolved endpoints.
     """
 
     seed: OpenAlexWorkId | None
@@ -133,6 +178,12 @@ class ExplorationResult:
     limits: ExplorationLimits
     requests: int
     elapsed_seconds: float
+    mode: ExplorationMode = "outgoing"
+    unread_incoming_pages: tuple[IncomingPageGap, ...] = ()
+    filters: ExplorationFilters | None = None
+    filter_scope: Literal["returned_results"] = "returned_results"
+    acquired_nodes: int = 0
+    acquired_edges: int = 0
 
 
 class ExplorationCancelled(asyncio.CancelledError):
@@ -152,33 +203,49 @@ class ExplorationCancelled(asyncio.CancelledError):
         self.result = result
 
 
-class ExploreOutgoing:
-    """Explore outgoing citations through the paper provider boundary.
+class ExploreCitations:
+    """Explore citations through lookup and incoming acquisition boundaries.
 
     Breadth-first discovery and lexical reference ordering make bounded coverage
     reproducible. Each call owns independent state and acquisition accounting.
     """
 
     def __init__(
-        self, provider: PaperProviderPort, *, clock: Callable[[], float] = time.monotonic
+        self,
+        provider: PaperProviderPort,
+        *,
+        incoming_provider: IncomingCitationPort | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         """Compose exploration without acquiring data.
 
         Args:
             provider: Acquisition boundary accounting for every physical request.
+            incoming_provider: Incoming boundary, defaulting to provider if supported.
             clock: Monotonic seconds source, injectable for deterministic tests.
         """
         self._provider = provider
+        self._incoming = incoming_provider
+        if self._incoming is None and isinstance(provider, IncomingCitationPort):
+            self._incoming = provider
         self._clock = clock
 
     async def execute(
-        self, seed: str | ResolvedPaper, limits: ExplorationLimits | None = None
+        self,
+        seed: str | ResolvedPaper,
+        limits: ExplorationLimits | None = None,
+        *,
+        mode: ExplorationMode = "outgoing",
+        filters: ExplorationFilters | None = None,
     ) -> ExplorationResult:
-        """Acquire a bounded outgoing neighborhood.
+        """Acquire a bounded neighborhood, processing outgoing before incoming.
 
         Args:
             seed: Raw DOI/work identifier or already ingested seed record.
             limits: Validated overrides, otherwise documented defaults.
+            mode: Outgoing, incoming, or both directions at every expanded node.
+            filters: Optional predicates applied after acquisition, retaining the seed and
+                only edges between retained papers. Traversal and budgets are unchanged.
 
         Returns:
             Acquired data with completion, budget and missing-reference information.
@@ -186,7 +253,12 @@ class ExploreOutgoing:
         Raises:
             InvalidIdentifierError: If the raw seed is malformed, before acquisition.
             ExplorationCancelled: Cancellation with the failed partial result attached.
+            ValueError: If mode is invalid or incoming acquisition is not configured.
         """
+        if mode not in ("outgoing", "incoming", "both"):
+            raise ValueError("mode must be outgoing, incoming or both")
+        if mode != "outgoing" and self._incoming is None:
+            raise ValueError("incoming citation acquisition is not configured")
         identifier = parse_identifier(seed) if isinstance(seed, str) else None
         bounds = limits or ExplorationLimits()
         budget = AcquisitionBudget(bounds.max_requests, bounds.max_seconds, clock=self._clock)
@@ -199,10 +271,26 @@ class ExploreOutgoing:
         seed_id: OpenAlexWorkId | None = None
         active_source: OpenAlexWorkId | None = None
         active_target = str(identifier) if identifier else ""
+        active_page: tuple[OpenAlexWorkId, str] | None = None
+
+        def record_stop(reason: str) -> None:
+            reasons.append(reason)
+            if active_page is None:
+                unresolved.append(UnresolvedReference(active_source, active_target, reason))
 
         def result(status: Literal["complete", "truncated", "failed"]) -> ExplorationResult:
+            retained = {
+                work_id: record
+                for work_id, record in nodes.items()
+                if filters is None or work_id == seed_id or filters.matches(record.paper)
+            }
+            retained_edges = tuple(
+                edge
+                for edge in edges.values()
+                if filters is None or (edge.source in retained and edge.target in retained)
+            )
             gaps = []
-            for work_id, record in nodes.items():
+            for work_id, record in retained.items():
                 paper = record.paper
                 fields = tuple(
                     name
@@ -224,8 +312,8 @@ class ExploreOutgoing:
                     gaps.append(MetadataGap(work_id, fields))
             return ExplorationResult(
                 seed_id,
-                tuple(nodes.values()),
-                tuple(edges.values()),
+                tuple(retained.values()),
+                retained_edges,
                 tuple(unresolved),
                 tuple(gaps),
                 status,
@@ -233,6 +321,11 @@ class ExploreOutgoing:
                 bounds,
                 budget.requests,
                 budget.elapsed,
+                mode,
+                (IncomingPageGap(*active_page, reasons[-1]),) if active_page else (),
+                filters=filters,
+                acquired_nodes=len(nodes),
+                acquired_edges=len(edges),
             )
 
         async def acquire(raw: str) -> ResolvedPaper:
@@ -258,9 +351,13 @@ class ExploreOutgoing:
                 if depth >= bounds.depth:
                     continue
                 record = nodes[source]
-                if not record.paper.references_complete:
+                if mode != "incoming" and not record.paper.references_complete:
                     reasons.append("incomplete_references")
-                references = sorted(set(record.paper.referenced_works), key=lambda ref: ref.value)
+                references = (
+                    sorted(set(record.paper.referenced_works), key=lambda ref: ref.value)
+                    if mode != "incoming"
+                    else []
+                )
                 for reference in references:
                     active_source, active_target = source, reference.value
                     budget.remaining_seconds()
@@ -276,15 +373,7 @@ class ExploreOutgoing:
                         and len(nodes) >= bounds.max_nodes
                     ):
                         raise AcquisitionLimitReached("nodes")
-                    evidence = Evidence(
-                        id=f"{record.evidence.provider}:citation:{record.evidence.provider_record_id}:{reference.value}",
-                        provider=record.evidence.provider,
-                        provider_record_id=record.evidence.provider_record_id,
-                        source_url=record.evidence.source_url,
-                        observed_at=record.evidence.observed_at,
-                        inference_status=InferenceStatus.REPORTED,
-                    )
-                    edge = CitationEdge(source, target, reference, evidence)
+                    edge = replace(_citation(record, reference), target=target)
                     edges[key] = edge
                     if reference in missing:
                         unresolved.append(UnresolvedReference(source, reference.value, "not_found"))
@@ -306,14 +395,53 @@ class ExploreOutgoing:
                     if canonical not in nodes:
                         nodes[canonical] = fetched
                         queue.append((canonical, depth + 1))
+                if mode != "outgoing":
+                    assert self._incoming is not None
+                    cursor: str | None = "*"
+                    seen_cursors: set[str] = set()
+                    while cursor is not None:
+                        active_page = (source, cursor)
+                        active_source, active_target = None, source.value
+                        if cursor in seen_cursors:
+                            raise AcquisitionLimitReached("repeated_cursor")
+                        seen_cursors.add(cursor)
+                        try:
+                            async with asyncio.timeout(budget.remaining_seconds()):
+                                page = await self._incoming.fetch_incoming(
+                                    source, cursor=cursor, page_size=100, budget=budget
+                                )
+                        except TimeoutError as exc:
+                            if isinstance(exc, ProviderTimeoutError):
+                                raise
+                            raise AcquisitionLimitReached("elapsed_time") from exc
+                        budget.remaining_seconds()
+                        for citing in page.works:
+                            citing_id = citing.paper.identifiers.openalex_id
+                            active_source, active_target = citing_id, source.value
+                            budget.remaining_seconds()
+                            if source not in citing.paper.referenced_works:
+                                raise ProviderMalformedResponseError(
+                                    "incoming record lacks the requested reference assertion"
+                                )
+                            key = (citing_id, source)
+                            if key in edges:
+                                continue
+                            if len(edges) >= bounds.max_edges:
+                                raise AcquisitionLimitReached("edges")
+                            if citing_id not in nodes and len(nodes) >= bounds.max_nodes:
+                                raise AcquisitionLimitReached("nodes")
+                            edges[key] = _citation(citing, source)
+                            if citing_id not in nodes:
+                                nodes[citing_id] = citing
+                                queue.append((citing_id, depth + 1))
+                        cursor = page.next_cursor
+                    active_page = None
             return result("truncated" if reasons else "complete")
         except AcquisitionLimitReached as exc:
-            reasons.append(exc.reason)
-            unresolved.append(UnresolvedReference(active_source, active_target, exc.reason))
+            record_stop(exc.reason)
             return result("truncated")
         except asyncio.CancelledError as exc:
-            reasons.append("cancelled")
-            unresolved.append(UnresolvedReference(active_source, active_target, "cancelled"))
+            record_stop("cancelled")
             raise ExplorationCancelled(result("failed")) from exc
         except (
             PaperNotFoundError,
@@ -322,7 +450,14 @@ class ExploreOutgoing:
             ProviderRetryExhaustedError,
             ProviderTimeoutError,
         ) as exc:
-            reason = "seed_not_found" if isinstance(exc, PaperNotFoundError) else "provider_failure"
-            reasons.append(reason)
-            unresolved.append(UnresolvedReference(active_source, active_target, reason))
+            reason = (
+                "seed_not_found"
+                if isinstance(exc, PaperNotFoundError) and seed_id is None
+                else "provider_failure"
+            )
+            record_stop(reason)
             return result("failed")
+
+
+# Preserve the original library entrypoint and its outgoing default.
+ExploreOutgoing = ExploreCitations
