@@ -33,3 +33,10 @@ Each ``Evidence`` preserves:
 identity helpers do not acquire citations or implement graph exploration.
 
 Follow [architecture](../../../docs/architecture.md).
+
+Filtered graph responses retain the original paper and citation evidence values.
+Inspect `nodes[].evidence` and `edges[].evidence` in HTTP/CLI JSON; match a citation's
+`source` and `target` to retained node identifiers. `referenced_id` preserves the
+original assertion even when its target was merged. Source URLs identify live
+provider records, whose contents may change after `observed_at`; no historical
+payload archive is implied. See the [inspection examples](../../../README.md#filter-results-and-inspect-evidence).

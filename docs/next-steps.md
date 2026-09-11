@@ -1,10 +1,10 @@
 # Citation Explorer tasks
 
-Status: identifier resolution and bounded outgoing, incoming and combined citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search with explicit selection is implemented; filtering remains unimplemented.
+Status: identifier resolution and bounded outgoing, incoming and combined citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search with explicit selection, metadata filtering and source inspection are implemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Filtering and evidence inspection is next; the complete-journey task remains unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Complete-journey and installable-package verification is next and remains unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -198,9 +198,27 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** `knowledge_graph`, `research/papers`, `provenance`.
 
-   **Assignee:** Unassigned. **Status:** ready for implementation.
-   Incoming and combined exploration is verified. Use its shared traversal and
-   evidence contracts when defining filter behavior and inspection journeys.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-11).
+   `ExplorationFilters` applies inclusive year/count ranges and exact normalized
+   author, venue and topic names after bounded traversal in every mode. The seed
+   remains; filtered edges require retained endpoints. HTTP and CLI use the same
+   predicates and return metadata, source evidence, normalized filters and original
+   acquisition counts/status. Missing metadata never matches an active predicate.
+   No dependencies, persistence or migration are introduced.
+
+   Evidence: `tests/knowledge_graph/test_filters.py` covers each predicate,
+   combinations, boundaries, missing values, invalid input before acquisition,
+   traversal through excluded intermediates, partial results, cancellation and
+   source inspection across library/HTTP/CLI. Ruff lint/format, strict mypy,
+   pytest (232 passed), OpenAPI drift check and wheel/sdist build passed. Changed
+   documentation links, source naming/docstrings and generated schema were reviewed.
+   The original unfiltered contracts remain compatible; response fields are additive.
+   Two existing dependency deprecation warnings remain. Docker build was attempted
+   but could not connect to the local daemon; live OpenAlex was not tested.
+
+   Limits: filters select within the acquired bounded neighborhood, not the corpus.
+   Exact display names do not disambiguate same-name authors. Live provider source
+   records may change after observation; no historical payload is archived.
 
    **After this task:** A caller can narrow the neighborhood by available metadata and inspect each returned paper and the source supporting each citation.
 
@@ -234,7 +252,7 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
 
-Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. All citation directions are implemented; filters and complete-journey verification remain required. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
+Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. All citation directions and filters are implemented; complete-journey verification remains required. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
 
 
 ## Implementation and developer-experience review
@@ -260,4 +278,4 @@ The HTTP schema is unchanged and no migration is needed. Gapped abstracts now
 remain unknown rather than exposing incomplete text as a reconstructed abstract.
 Two existing dependency deprecation warnings remain. Live-provider acquisition and
 Docker were not tested in this review. Incoming/combined exploration was subsequently
-implemented as recorded above; filters and complete-journey verification remain unimplemented.
+implemented as recorded above, followed by filtering; complete-journey verification remains pending.

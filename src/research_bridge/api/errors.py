@@ -4,6 +4,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from research_bridge.knowledge_graph.application import InvalidFilterError
 from research_bridge.research.papers.application import InvalidSearchError
 from research_bridge.research.papers.application.errors import (
     PaperNotFoundError,
@@ -31,6 +32,7 @@ class ErrorResponse(BaseModel):
 ERRORS: dict[type[Exception], tuple[int, str, str]] = {
     InvalidIdentifierError: (422, "invalid_identifier", "Unsupported or malformed identifier."),
     InvalidSearchError: (422, "invalid_search", "Invalid title query or candidate page."),
+    InvalidFilterError: (422, "invalid_filters", "Invalid metadata filter values."),
     ValueError: (422, "invalid_limits", "Limits are outside the supported range."),
     PaperNotFoundError: (404, "not_found", "Paper not found."),
     ProviderRateLimitedError: (429, "rate_limited", "Provider rate limit reached."),

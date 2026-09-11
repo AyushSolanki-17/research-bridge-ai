@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Literal
 
+from research_bridge.knowledge_graph.application.filters import ExplorationFilters
 from research_bridge.knowledge_graph.application.incoming import IncomingCitationPort
 from research_bridge.provenance.domain.evidence import Evidence, InferenceStatus
 from research_bridge.research.papers.application import (
@@ -150,10 +151,10 @@ class ExplorationResult:
 
     Attributes:
         seed: Resolved seed identity, or None if acquisition failed.
-        nodes: Unique acquired papers in breadth-first discovery order.
+        nodes: Retained papers in breadth-first discovery order; seed is always retained.
         edges: Unique directed citations in stable traversal order.
         unresolved: References that could not be acquired.
-        incomplete_metadata: Missing fields on acquired records.
+        incomplete_metadata: Missing fields on retained records.
         status: Complete within scope, truncated, or failed acquisition.
         stop_reasons: Machine-readable explanations, empty for complete results.
         limits: Applied validated bounds.
@@ -161,6 +162,10 @@ class ExplorationResult:
         elapsed_seconds: Monotonic operation duration.
         mode: Direction followed during discovery; edges always mean citing to cited.
         unread_incoming_pages: Incoming pages interrupted during acquisition or processing.
+        filters: Normalized predicates, or None for the original unfiltered result.
+        filter_scope: Filters affect returned results within the bounded neighborhood.
+        acquired_nodes: Paper count before filtering, including the seed.
+        acquired_edges: Citation count before filtering, including unresolved endpoints.
     """
 
     seed: OpenAlexWorkId | None
@@ -175,6 +180,10 @@ class ExplorationResult:
     elapsed_seconds: float
     mode: ExplorationMode = "outgoing"
     unread_incoming_pages: tuple[IncomingPageGap, ...] = ()
+    filters: ExplorationFilters | None = None
+    filter_scope: Literal["returned_results"] = "returned_results"
+    acquired_nodes: int = 0
+    acquired_edges: int = 0
 
 
 class ExplorationCancelled(asyncio.CancelledError):
@@ -227,6 +236,7 @@ class ExploreCitations:
         limits: ExplorationLimits | None = None,
         *,
         mode: ExplorationMode = "outgoing",
+        filters: ExplorationFilters | None = None,
     ) -> ExplorationResult:
         """Acquire a bounded neighborhood, processing outgoing before incoming.
 
@@ -234,6 +244,8 @@ class ExploreCitations:
             seed: Raw DOI/work identifier or already ingested seed record.
             limits: Validated overrides, otherwise documented defaults.
             mode: Outgoing, incoming, or both directions at every expanded node.
+            filters: Optional predicates applied after acquisition, retaining the seed and
+                only edges between retained papers. Traversal and budgets are unchanged.
 
         Returns:
             Acquired data with completion, budget and missing-reference information.
@@ -267,8 +279,18 @@ class ExploreCitations:
                 unresolved.append(UnresolvedReference(active_source, active_target, reason))
 
         def result(status: Literal["complete", "truncated", "failed"]) -> ExplorationResult:
+            retained = {
+                work_id: record
+                for work_id, record in nodes.items()
+                if filters is None or work_id == seed_id or filters.matches(record.paper)
+            }
+            retained_edges = tuple(
+                edge
+                for edge in edges.values()
+                if filters is None or (edge.source in retained and edge.target in retained)
+            )
             gaps = []
-            for work_id, record in nodes.items():
+            for work_id, record in retained.items():
                 paper = record.paper
                 fields = tuple(
                     name
@@ -290,8 +312,8 @@ class ExploreCitations:
                     gaps.append(MetadataGap(work_id, fields))
             return ExplorationResult(
                 seed_id,
-                tuple(nodes.values()),
-                tuple(edges.values()),
+                tuple(retained.values()),
+                retained_edges,
                 tuple(unresolved),
                 tuple(gaps),
                 status,
@@ -301,6 +323,9 @@ class ExploreCitations:
                 budget.elapsed,
                 mode,
                 (IncomingPageGap(*active_page, reasons[-1]),) if active_page else (),
+                filters=filters,
+                acquired_nodes=len(nodes),
+                acquired_edges=len(edges),
             )
 
         async def acquire(raw: str) -> ResolvedPaper:

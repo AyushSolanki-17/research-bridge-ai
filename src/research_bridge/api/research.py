@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 
 from research_bridge.knowledge_graph.application import (
+    ExplorationFilters,
     ExplorationLimits,
     ExplorationMode,
     ExplorationResult,
@@ -50,10 +51,37 @@ class LimitsRequest(BaseModel):
         return ExplorationLimits(**self.model_dump())
 
 
+class FiltersRequest(BaseModel):
+    """Metadata predicates; application contracts own matching and range validation."""
+
+    model_config = ConfigDict(extra="forbid")
+    year_from: StrictInt | None = Field(default=None, description="Inclusive year: 1–9999.")
+    year_to: StrictInt | None = Field(default=None, description="Inclusive year: 1–9999.")
+    min_citations: StrictInt | None = Field(
+        default=None, description="Inclusive count, at least 0."
+    )
+    max_citations: StrictInt | None = Field(
+        default=None, description="Inclusive count, at least 0."
+    )
+    author: str | None = Field(
+        default=None, max_length=300, description="Exact author display name."
+    )
+    venue: str | None = Field(default=None, max_length=300, description="Exact venue display name.")
+    topic: str | None = Field(default=None, max_length=300, description="Exact topic display name.")
+
+    def to_application(self) -> ExplorationFilters:
+        """Build normalized predicates, raising ValueError for invalid filter inputs."""
+        return ExplorationFilters(**self.model_dump())
+
+
 class ExploreRequest(ResolveRequest):
     """Outgoing exploration input with optional bounded overrides."""
 
     limits: LimitsRequest = Field(default_factory=LimitsRequest)
+    filters: FiltersRequest | None = Field(
+        default=None,
+        description="Filter returned papers after bounded traversal; always retain the seed.",
+    )
 
 
 class CitationExploreRequest(ExploreRequest):
@@ -95,7 +123,11 @@ async def explore_outgoing(
     explorer: Annotated[ExploreOutgoing, Depends(get_explorer)],
 ) -> ExplorationResult:
     """Return an outgoing neighborhood with explicit scope and completion status."""
-    result = await explorer.execute(body.identifier, body.limits.to_application())
+    result = await explorer.execute(
+        body.identifier,
+        body.limits.to_application(),
+        filters=body.filters.to_application() if body.filters is not None else None,
+    )
     if result.status == "failed":
         response.status_code = 404 if "seed_not_found" in result.stop_reasons else 502
     return result
@@ -116,7 +148,12 @@ async def explore_citations(
     explorer: Annotated[ExploreOutgoing, Depends(get_explorer)],
 ) -> ExplorationResult:
     """Return a bounded neighborhood in the requested citation directions."""
-    result = await explorer.execute(body.identifier, body.limits.to_application(), mode=body.mode)
+    result = await explorer.execute(
+        body.identifier,
+        body.limits.to_application(),
+        mode=body.mode,
+        filters=body.filters.to_application() if body.filters is not None else None,
+    )
     if result.status == "failed":
         response.status_code = 404 if "seed_not_found" in result.stop_reasons else 502
     return result

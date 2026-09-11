@@ -66,6 +66,17 @@
         "additionalProperties": false,
         "description": "Citation exploration direction with the same shared operation bounds.",
         "properties": {
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FiltersRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Filter returned papers after bounded traversal; always retain the seed."
+          },
           "identifier": {
             "maxLength": 2048,
             "minLength": 1,
@@ -177,6 +188,90 @@
         "title": "Evidence",
         "type": "object"
       },
+      "ExplorationFilters": {
+        "description": "Conjunctive predicates on available paper metadata, applied after traversal.\n\nAttributes:\n    year_from: Inclusive publication year lower bound, from 1 through 9999.\n    year_to: Inclusive publication year upper bound, from 1 through 9999.\n    min_citations: Inclusive nonnegative reported citation-count lower bound.\n    max_citations: Inclusive nonnegative reported citation-count upper bound.\n    author: Exact normalized display name of any author, at most 300 characters.\n    venue: Exact normalized venue display name, at most 300 characters.\n    topic: Exact normalized display name of any topic, at most 300 characters.\n\nNone disables a predicate. Missing metadata fails an enabled predicate.\nNames collapse whitespace and ignore case; they do not resolve identities.\nInvalid bounds, reversed ranges or blank names raise InvalidFilterError.",
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "max_citations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Citations"
+          },
+          "min_citations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Citations"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Venue"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year To"
+          }
+        },
+        "title": "ExplorationFilters",
+        "type": "object"
+      },
       "ExplorationLimits": {
         "description": "Validated bounds shared by all directions in one neighborhood.\n\nAttributes:\n    depth: Citation hops, from 1 through 3; seed is at depth zero.\n    max_nodes: Paper limit including the seed, from 1 through 500.\n    max_edges: Unique directed edge limit, from 1 through 2000.\n    max_requests: Physical request limit including retries, from 1 through 1000.\n    max_seconds: Positive finite elapsed limit, at most 120 seconds.",
         "properties": {
@@ -210,8 +305,18 @@
         "type": "object"
       },
       "ExplorationResult": {
-        "description": "Immutable acquired neighborhood and explicit completion evidence.\n\nAttributes:\n    seed: Resolved seed identity, or None if acquisition failed.\n    nodes: Unique acquired papers in breadth-first discovery order.\n    edges: Unique directed citations in stable traversal order.\n    unresolved: References that could not be acquired.\n    incomplete_metadata: Missing fields on acquired records.\n    status: Complete within scope, truncated, or failed acquisition.\n    stop_reasons: Machine-readable explanations, empty for complete results.\n    limits: Applied validated bounds.\n    requests: Physical provider requests consumed, including seed and retries.\n    elapsed_seconds: Monotonic operation duration.\n    mode: Direction followed during discovery; edges always mean citing to cited.\n    unread_incoming_pages: Incoming pages interrupted during acquisition or processing.",
+        "description": "Immutable acquired neighborhood and explicit completion evidence.\n\nAttributes:\n    seed: Resolved seed identity, or None if acquisition failed.\n    nodes: Retained papers in breadth-first discovery order; seed is always retained.\n    edges: Unique directed citations in stable traversal order.\n    unresolved: References that could not be acquired.\n    incomplete_metadata: Missing fields on retained records.\n    status: Complete within scope, truncated, or failed acquisition.\n    stop_reasons: Machine-readable explanations, empty for complete results.\n    limits: Applied validated bounds.\n    requests: Physical provider requests consumed, including seed and retries.\n    elapsed_seconds: Monotonic operation duration.\n    mode: Direction followed during discovery; edges always mean citing to cited.\n    unread_incoming_pages: Incoming pages interrupted during acquisition or processing.\n    filters: Normalized predicates, or None for the original unfiltered result.\n    filter_scope: Filters affect returned results within the bounded neighborhood.\n    acquired_nodes: Paper count before filtering, including the seed.\n    acquired_edges: Citation count before filtering, including unresolved endpoints.",
         "properties": {
+          "acquired_edges": {
+            "default": 0,
+            "title": "Acquired Edges",
+            "type": "integer"
+          },
+          "acquired_nodes": {
+            "default": 0,
+            "title": "Acquired Nodes",
+            "type": "integer"
+          },
           "edges": {
             "items": {
               "$ref": "#/components/schemas/CitationEdge"
@@ -222,6 +327,22 @@
           "elapsed_seconds": {
             "title": "Elapsed Seconds",
             "type": "number"
+          },
+          "filter_scope": {
+            "const": "returned_results",
+            "default": "returned_results",
+            "title": "Filter Scope",
+            "type": "string"
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplorationFilters"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "incomplete_metadata": {
             "items": {
@@ -315,6 +436,17 @@
         "additionalProperties": false,
         "description": "Outgoing exploration input with optional bounded overrides.",
         "properties": {
+          "filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FiltersRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Filter returned papers after bounded traversal; always retain the seed."
+          },
           "identifier": {
             "maxLength": 2048,
             "minLength": 1,
@@ -329,6 +461,101 @@
           "identifier"
         ],
         "title": "ExploreRequest",
+        "type": "object"
+      },
+      "FiltersRequest": {
+        "additionalProperties": false,
+        "description": "Metadata predicates; application contracts own matching and range validation.",
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact author display name.",
+            "title": "Author"
+          },
+          "max_citations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive count, at least 0.",
+            "title": "Max Citations"
+          },
+          "min_citations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive count, at least 0.",
+            "title": "Min Citations"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact topic display name.",
+            "title": "Topic"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact venue display name.",
+            "title": "Venue"
+          },
+          "year_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive year: 1\u20139999.",
+            "title": "Year From"
+          },
+          "year_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Inclusive year: 1\u20139999.",
+            "title": "Year To"
+          }
+        },
+        "title": "FiltersRequest",
         "type": "object"
       },
       "HealthResponse": {

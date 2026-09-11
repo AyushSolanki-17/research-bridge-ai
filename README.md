@@ -11,7 +11,7 @@ uv sync --frozen --extra server
 uv run --extra server research-bridge-ai-api
 ```
 
-Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. DOI/OpenAlex resolution and bounded outgoing, incoming and combined citation exploration are available through the Python library, HTTP and CLI. Title search with explicit candidate selection is also available. Filtering is not yet implemented.
+Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. DOI/OpenAlex resolution and bounded outgoing, incoming and combined citation exploration are available through the Python library, HTTP and CLI. Title search with explicit candidate selection is also available. Metadata filters and source inspection are available on graph results.
 
 `RB_HOST` defaults to `127.0.0.1`; `RB_PORT` defaults to `8000`. `.env.example` documents optional settings. To load an env file, pass `uv run --env-file .env --extra server research-bridge-ai-api`; dotenv files are not loaded implicitly. No database or provider credentials are required.
 
@@ -148,6 +148,54 @@ incoming pages at each expanded node, using one shared budget. Incoming page
 failures preserve earlier records and identify the interrupted page. See the
 [direction and pagination contract](src/research_bridge/knowledge_graph/README.md#incoming-and-combined-traversal).
 Existing `ExploreOutgoing` imports and `/v1/graphs/outgoing` remain supported.
+
+## Filter results and inspect evidence
+
+```sh
+uv run research-bridge explore W2741809807 --mode both --depth 2 --year-from 2018 --year-to 2025 --min-citations 0 --topic 'Graph Theory' > graph.json
+curl -X POST http://localhost:8000/v1/graphs/explore -H 'Content-Type: application/json' -d '{"identifier":"W2741809807","mode":"both","filters":{"year_from":2018,"max_citations":100,"venue":"Nature"}}'
+```
+
+Optional CLI flags also include `--author`, `--venue` and `--max-citations`.
+Ranges are inclusive. Names match exactly, ignoring case and whitespace; all
+supplied filters combine with AND. Missing metadata fails an active filter. Invalid
+filter values use HTTP 422 or CLI exit 2 with error code `invalid_filters`.
+These examples may retain only the seed when the acquired neighborhood has no
+matches. Filters apply after traversal, within the requested depth and budgets;
+they do not query the full corpus. The seed stays, and filtered edges require
+retained endpoints. Inspect `filters`, `acquired_nodes`, `acquired_edges`, `limits`
+and `status` before interpreting coverage. See the
+[full filter semantics](src/research_bridge/knowledge_graph/README.md#filter-returned-papers-and-inspect-evidence).
+
+```python
+from research_bridge.knowledge_graph.application import ExplorationFilters
+
+graph = asyncio.run(
+    ExploreCitations(OpenAlexPaperAdapter()).execute(
+        "W2741809807",
+        ExplorationLimits(depth=2),
+        mode="both",
+        filters=ExplorationFilters(year_from=2018, min_citations=0),
+    )
+)
+for node in graph.nodes:
+    print(node.paper.identifiers.openalex_id, node.paper.title, node.evidence.to_dict())
+for edge in graph.edges:
+    print(edge.source, edge.target, edge.referenced_id, edge.evidence.to_dict())
+```
+
+For CLI/HTTP JSON, select a paper from `nodes` by its canonical identifier and
+inspect its metadata and source. For example, after saving the CLI result above:
+
+```sh
+jq '.nodes[] | select(.paper.identifiers.openalex_id.value == "W2741809807") | {paper, evidence}' graph.json
+jq '.edges[] | {source, target, referenced_id, evidence}' graph.json
+```
+
+Every evidence record exposes its stable ID, provider record ID, source URL,
+observation time and reported/inferred status. Follow `evidence.source_url` to
+inspect the source record; it may have changed since observation. Citation evidence
+supports the original reference assertion, including when the target was merged.
 
 ## Checks and packaging
 

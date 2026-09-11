@@ -89,3 +89,17 @@ limits across seed, directions, cursor pages and retries. See the
 `run` accept an optional `incoming_provider`; otherwise the lookup provider is
 used if it implements incoming acquisition. Custom lookup-only providers remain
 usable for outgoing requests; incoming mode without a boundary fails before I/O.
+
+## Filtered graph results
+
+Both graph routes accept an optional `filters` object with `year_from`, `year_to`,
+`min_citations`, `max_citations`, `author`, `venue` and `topic`. Numeric ranges are
+inclusive, names match exactly after whitespace/case normalization, and predicates
+combine with AND. Invalid values return 422 `invalid_filters` before acquisition;
+malformed field types or shapes return 422 `invalid_request`. Filters apply
+only after bounded traversal; the seed remains and edges require retained endpoints.
+Responses report normalized `filters`, `filter_scope: "returned_results"`,
+`acquired_nodes` and `acquired_edges` alongside the original acquisition diagnostics.
+Paper metadata and paper/edge evidence remain embedded in `nodes` and `edges`.
+See the [complete filter contract](../knowledge_graph/README.md#filter-returned-papers-and-inspect-evidence),
+including missing values, empty filters and unfiltered compatibility.
