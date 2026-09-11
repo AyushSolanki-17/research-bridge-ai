@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 
 from research_bridge.knowledge_graph.application import (
     ExplorationLimits,
+    ExplorationMode,
     ExplorationResult,
     ExploreOutgoing,
 )
@@ -55,6 +56,12 @@ class ExploreRequest(ResolveRequest):
     limits: LimitsRequest = Field(default_factory=LimitsRequest)
 
 
+class CitationExploreRequest(ExploreRequest):
+    """Citation exploration direction with the same shared operation bounds."""
+
+    mode: ExplorationMode = "outgoing"
+
+
 def get_resolver(request: Request) -> ResolvePaper:
     """Return the resolver composed by this application instance."""
     return cast(ResolvePaper, request.app.state.resolver)
@@ -89,6 +96,27 @@ async def explore_outgoing(
 ) -> ExplorationResult:
     """Return an outgoing neighborhood with explicit scope and completion status."""
     result = await explorer.execute(body.identifier, body.limits.to_application())
+    if result.status == "failed":
+        response.status_code = 404 if "seed_not_found" in result.stop_reasons else 502
+    return result
+
+
+@router.post(
+    "/graphs/explore",
+    response_model=ExplorationResult,
+    operation_id="explore_citations",
+    responses={
+        404: {"model": ExplorationResult, "description": "Seed not found."},
+        502: {"model": ExplorationResult, "description": "Provider failure with partial data."},
+    },
+)
+async def explore_citations(
+    body: CitationExploreRequest,
+    response: Response,
+    explorer: Annotated[ExploreOutgoing, Depends(get_explorer)],
+) -> ExplorationResult:
+    """Return a bounded neighborhood in the requested citation directions."""
+    result = await explorer.execute(body.identifier, body.limits.to_application(), mode=body.mode)
     if result.status == "failed":
         response.status_code = 404 if "seed_not_found" in result.stop_reasons else 502
     return result

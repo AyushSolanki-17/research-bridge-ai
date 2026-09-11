@@ -2,7 +2,7 @@
 
 ## Start here
 
-Read [next steps](docs/next-steps.md), [coding style](docs/coding-style.md), [product context](docs/product.md), [architecture](docs/architecture.md), and the affected capability README. Architecture governs placement; product context governs research semantics. This repo implements identifier resolution, title candidate search and bounded outgoing citation exploration through the library, HTTP and CLI. Incoming/combined exploration and filters remain unimplemented. Read README.md for runnable checks and report only verification actually performed.
+Read [next steps](docs/next-steps.md), [coding style](docs/coding-style.md), [product context](docs/product.md), [architecture](docs/architecture.md), and the affected capability README. Architecture governs placement; product context governs research semantics. This repo implements identifier resolution, title candidate search and bounded outgoing, incoming and combined citation exploration through the library, HTTP and CLI. Filters remain unimplemented. Read README.md for runnable checks and report only verification actually performed.
 
 ## Contribution policy
 

@@ -4,6 +4,14 @@ Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoi
 
 ## Source layout
 
+Incoming and combined exploration reuse the same `ExploreCitations` state and
+budgets as outgoing exploration (`ExploreOutgoing` remains a compatible alias).
+Knowledge graph owns `IncomingCitationPort` and `IncomingPage`, implemented by
+the OpenAlex adapter with cursor acquisition. Incoming edges require explicit
+references in the citing record; missing or contradictory assertions fail with
+partial data. HTTP exposes modes through `/v1/graphs/explore`; CLI uses `--mode`.
+No database, additional dependency or persistent pagination session is needed.
+
 ```text
 src/research_bridge/
   research/papers/

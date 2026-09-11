@@ -62,6 +62,36 @@
         "title": "CitationEdge",
         "type": "object"
       },
+      "CitationExploreRequest": {
+        "additionalProperties": false,
+        "description": "Citation exploration direction with the same shared operation bounds.",
+        "properties": {
+          "identifier": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Identifier",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/LimitsRequest"
+          },
+          "mode": {
+            "default": "outgoing",
+            "enum": [
+              "outgoing",
+              "incoming",
+              "both"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "title": "CitationExploreRequest",
+        "type": "object"
+      },
       "Doi": {
         "description": "Validated DOI value object.\n\nAttributes:\n    value: Normalized DOI (lowercased, without prefix or URL).",
         "properties": {
@@ -148,7 +178,7 @@
         "type": "object"
       },
       "ExplorationLimits": {
-        "description": "Validated bounds for one outgoing neighborhood.\n\nAttributes:\n    depth: Citation hops, from 1 through 3; seed is at depth zero.\n    max_nodes: Paper limit including the seed, from 1 through 500.\n    max_edges: Unique directed edge limit, from 1 through 2000.\n    max_requests: Physical request limit including retries, from 1 through 1000.\n    max_seconds: Positive finite elapsed limit, at most 120 seconds.",
+        "description": "Validated bounds shared by all directions in one neighborhood.\n\nAttributes:\n    depth: Citation hops, from 1 through 3; seed is at depth zero.\n    max_nodes: Paper limit including the seed, from 1 through 500.\n    max_edges: Unique directed edge limit, from 1 through 2000.\n    max_requests: Physical request limit including retries, from 1 through 1000.\n    max_seconds: Positive finite elapsed limit, at most 120 seconds.",
         "properties": {
           "depth": {
             "default": 1,
@@ -180,7 +210,7 @@
         "type": "object"
       },
       "ExplorationResult": {
-        "description": "Immutable acquired neighborhood and explicit completion evidence.\n\nAttributes:\n    seed: Resolved seed identity, or None if acquisition failed.\n    nodes: Unique acquired papers in breadth-first discovery order.\n    edges: Unique directed citations in stable traversal order.\n    unresolved: References that could not be acquired.\n    incomplete_metadata: Missing fields on acquired records.\n    status: Complete within scope, truncated, or failed acquisition.\n    stop_reasons: Machine-readable explanations, empty for complete results.\n    limits: Applied validated bounds.\n    requests: Physical provider requests consumed, including seed and retries.\n    elapsed_seconds: Monotonic operation duration.",
+        "description": "Immutable acquired neighborhood and explicit completion evidence.\n\nAttributes:\n    seed: Resolved seed identity, or None if acquisition failed.\n    nodes: Unique acquired papers in breadth-first discovery order.\n    edges: Unique directed citations in stable traversal order.\n    unresolved: References that could not be acquired.\n    incomplete_metadata: Missing fields on acquired records.\n    status: Complete within scope, truncated, or failed acquisition.\n    stop_reasons: Machine-readable explanations, empty for complete results.\n    limits: Applied validated bounds.\n    requests: Physical provider requests consumed, including seed and retries.\n    elapsed_seconds: Monotonic operation duration.\n    mode: Direction followed during discovery; edges always mean citing to cited.\n    unread_incoming_pages: Incoming pages interrupted during acquisition or processing.",
         "properties": {
           "edges": {
             "items": {
@@ -202,6 +232,16 @@
           },
           "limits": {
             "$ref": "#/components/schemas/ExplorationLimits"
+          },
+          "mode": {
+            "default": "outgoing",
+            "enum": [
+              "outgoing",
+              "incoming",
+              "both"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "nodes": {
             "items": {
@@ -238,6 +278,14 @@
               "type": "string"
             },
             "title": "Stop Reasons",
+            "type": "array"
+          },
+          "unread_incoming_pages": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/IncomingPageGap"
+            },
+            "title": "Unread Incoming Pages",
             "type": "array"
           },
           "unresolved": {
@@ -294,6 +342,29 @@
           }
         },
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "IncomingPageGap": {
+        "description": "An incoming page that was not fully processed.\n\nAttributes:\n    target: Referenced work whose citing neighborhood remains incomplete.\n    cursor: Provider page that failed or was only partially processed.\n    reason: Budget limit, repeated cursor, provider failure or cancellation.",
+        "properties": {
+          "cursor": {
+            "title": "Cursor",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/OpenAlexWorkId"
+          }
+        },
+        "required": [
+          "target",
+          "cursor",
+          "reason"
+        ],
+        "title": "IncomingPageGap",
         "type": "object"
       },
       "InferenceStatus": {
@@ -847,6 +918,88 @@
         "summary": "Health",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/v1/graphs/explore": {
+      "post": {
+        "description": "Return a bounded neighborhood in the requested citation directions.",
+        "operationId": "explore_citations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CitationExploreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationResult"
+                }
+              }
+            },
+            "description": "Seed not found."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationResult"
+                }
+              }
+            },
+            "description": "Provider failure with partial data."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Explore Citations",
+        "tags": [
+          "research"
         ]
       }
     },

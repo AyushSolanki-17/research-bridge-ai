@@ -1,4 +1,4 @@
-# Outgoing citation exploration
+# Bounded citation exploration
 
 `application.ExploreOutgoing(provider).execute(seed, limits)` accepts a DOI/work
 identifier or an already ingested `ResolvedPaper`. It returns canonical papers,
@@ -68,3 +68,45 @@ accounting for retries and redirects. HTTP and CLI call these same contracts;
 see the [runtime examples](../../../README.md).
 
 See [architecture](../../../docs/architecture.md).
+
+## Incoming and combined traversal
+
+`ExploreCitations(provider, incoming_provider=None).execute(seed, limits, mode="incoming")`
+supports `outgoing`, `incoming` and `both`. `ExploreOutgoing` is a compatibility
+alias with the same outgoing default. Incoming modes require `IncomingCitationPort`:
+use an explicit injected boundary, or a lookup provider implementing `fetch_incoming`.
+Missing incoming support or an invalid mode raises `ValueError` before acquisition.
+
+At each breadth-first node, `both` processes lexically ordered outgoing references,
+then all incoming cursor pages in provider order. Incoming works are consumed in
+page order, with canonical node and directed edge deduplication. First observation
+wins for repeated nodes/edges. The same directions apply at every hop; depth counts
+discovery hops even when an incoming edge points toward the shallower node.
+Nodes at the depth boundary are not expanded. Cycles do not trigger re-expansion.
+Ordering is deterministic for identical provider responses, not a frozen corpus view.
+
+All directions and pages share the existing request/time/node/edge bounds. Earlier
+outgoing work or incoming pages may use the remaining budget before later work.
+Incoming acquisition requests up to 100 records per page; `max_nodes` bounds retained
+graph nodes, with one provider page temporarily buffered. A full node/edge bound
+can require a further page to prove exhaustion or discover additional work. Duplicate
+and empty pages still consume requests; changing cursors cannot bypass the budget.
+Repeated cursors truncate with `repeated_cursor`. Reaching a limit never implies
+provider exhaustion, even if the page's declared citation count suggests it.
+
+Incoming lookup uses the provider's citing-work operation, not local inversion of
+the acquired graph. Every incoming edge uses the citing record's explicit
+`referenced_works` assertion and the same stable evidence identity as outgoing
+edges. If a returned work lacks that exact normalized target (including unresolved
+merged identifiers), the result fails with `provider_failure` and retains earlier
+data. The filter response alone does not substitute for missing record evidence.
+Missing references on a node do not truncate incoming-only expansion; missing
+outgoing metadata remains visible in `incomplete_metadata`.
+
+Results include the applied `mode`. `unread_incoming_pages` identifies an interrupted
+page by `target`, opaque `cursor` and `reason`, including acquisition failure,
+deadline, cancellation or stopping partway through its records. This is diagnostic
+context, not a public resume token. Retry the whole operation with appropriate
+limits; provider changes can affect membership. It does not enumerate pages of
+every queued, unexpanded node. `unresolved` retains outgoing-reference and seed
+failures; `stop_reasons` describes the overall incomplete scope.

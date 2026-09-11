@@ -1,10 +1,10 @@
 # Citation Explorer tasks
 
-Status: identifier resolution and bounded outgoing citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search with explicit selection is implemented; incoming/combined exploration and filtering remain unimplemented.
+Status: identifier resolution and bounded outgoing, incoming and combined citation exploration are implemented through the Python library, HTTP and CLI with canonical metadata and provenance. Title search with explicit selection is implemented; filtering remains unimplemented.
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Incoming and combined exploration is next; subsequent tasks remain unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Filtering and evidence inspection is next; the complete-journey task remains unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -155,9 +155,30 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** `knowledge_graph`, `ingestion/openalex`.
 
-   **Assignee:** Unassigned. **Status:** ready for implementation.
-   Prerequisite capabilities are implemented. This document and the linked local
-   product, architecture and capability guidance provide the implementation handoff.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-10).
+   `ExploreCitations`, `POST /v1/graphs/explore` and CLI `explore --mode` expose
+   outgoing, incoming and combined traversal. OpenAlex incoming acquisition uses
+   cursor-paginated `cites` filtering and shared bounded HTTP handling. All modes
+   retain citing-to-referenced edges with explicit source assertions. Existing
+   outgoing entrypoints remain compatible; responses add mode and interrupted
+   incoming-page context. No dependency or database migration is introduced.
+
+   Evidence: `tests/knowledge_graph/test_incoming.py` covers asymmetric graphs at
+   every supported depth/mode, pagination, cycles, duplicate records, repeated
+   cursors, exact count and elapsed boundaries, shared budgets, cancellation,
+   partial failures, malformed pages, physical retry accounting and transport
+   agreement. Ruff lint/format, strict mypy, pytest (177 passed), OpenAPI drift
+   check and wheel/sdist build passed. A clean wheel installation without FastAPI
+   ran library and actual CLI acquisition against a local synthetic HTTP server
+   for all modes at depth 3, including CLI truncation. Source, generated schema,
+   package member paths and changed documentation links were reviewed.
+
+   Limits: provider ordering and membership can change between calls. Missing or
+   contradictory incoming reference assertions fail with partial data; merged
+   reference identifiers that do not match the queried target are not inferred.
+   Outgoing work precedes incoming pages at each expanded node and can exhaust
+   the shared budget first. Live OpenAlex and Docker were not tested for this
+   change. Two existing dependency deprecation warnings remain.
 
    **After this task:** A caller can explore papers citing the seed, papers the seed cites, or both, while retaining correct citation direction and shared limits.
 
@@ -176,6 +197,10 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 6. **Filter results and inspect evidence**
 
    **Owner:** `knowledge_graph`, `research/papers`, `provenance`.
+
+   **Assignee:** Unassigned. **Status:** ready for implementation.
+   Incoming and combined exploration is verified. Use its shared traversal and
+   evidence contracts when defining filter behavior and inspection journeys.
 
    **After this task:** A caller can narrow the neighborhood by available metadata and inspect each returned paper and the source supporting each citation.
 
@@ -209,7 +234,7 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
 
-Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. The HTTP/CLI task provides the first usable outgoing explorer; incoming exploration, filters and complete-journey verification are still required afterward. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
+Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. All citation directions are implemented; filters and complete-journey verification remain required. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
 
 
 ## Implementation and developer-experience review
@@ -234,5 +259,5 @@ the diff, wheel/sdist member paths and changed Markdown file-link targets.
 The HTTP schema is unchanged and no migration is needed. Gapped abstracts now
 remain unknown rather than exposing incomplete text as a reconstructed abstract.
 Two existing dependency deprecation warnings remain. Live-provider acquisition and
-Docker were not tested in this review. Incoming/combined exploration remains next;
-filters and complete-journey verification remain unimplemented.
+Docker were not tested in this review. Incoming/combined exploration was subsequently
+implemented as recorded above; filters and complete-journey verification remain unimplemented.

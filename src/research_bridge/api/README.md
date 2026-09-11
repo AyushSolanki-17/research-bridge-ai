@@ -72,3 +72,20 @@ invalid transport shape/types yield 422 `invalid_request`. Cancellation propagat
 Search does not choose a seed: submit the reviewed identifier to an existing resolve
 or outgoing graph endpoint. All search requests are read-only and unauthenticated.
 Tests can inject a separate `search_provider` into `create_app` or CLI `run`.
+
+## Citation direction modes
+
+`POST /v1/graphs/explore` accepts `identifier`, optional `limits` and optional
+`mode`: `outgoing` (default), `incoming` or `both`. All modes share the graph
+response and HTTP status mapping above. Results also expose applied `mode` and
+`unread_incoming_pages` (`target`, opaque provider `cursor`, `reason`) for an
+interrupted incoming page. These fields are additive to outgoing results.
+Invalid modes return 422 `invalid_request`; incomplete acquisition never becomes
+a successful complete graph. Incoming/combined requests use the same operation
+limits across seed, directions, cursor pages and retries. See the
+[traversal contract](../knowledge_graph/README.md#incoming-and-combined-traversal).
+
+`/v1/graphs/outgoing` retains its outgoing-only request shape. `create_app` and CLI
+`run` accept an optional `incoming_provider`; otherwise the lookup provider is
+used if it implements incoming acquisition. Custom lookup-only providers remain
+usable for outgoing requests; incoming mode without a boundary fails before I/O.

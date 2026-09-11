@@ -11,7 +11,7 @@ uv sync --frozen --extra server
 uv run --extra server research-bridge-ai-api
 ```
 
-Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. DOI/OpenAlex resolution and bounded outgoing citation exploration are available through the Python library, HTTP and CLI. Title search with explicit candidate selection is also available. Incoming citations and filtering are not yet implemented.
+Python 3.13 is selected by `.python-version`; uv can install it automatically. Open http://localhost:8000/docs or http://localhost:8000/health. DOI/OpenAlex resolution and bounded outgoing, incoming and combined citation exploration are available through the Python library, HTTP and CLI. Title search with explicit candidate selection is also available. Filtering is not yet implemented.
 
 `RB_HOST` defaults to `127.0.0.1`; `RB_PORT` defaults to `8000`. `.env.example` documents optional settings. To load an env file, pass `uv run --env-file .env --extra server research-bridge-ai-api`; dotenv files are not loaded implicitly. No database or provider credentials are required.
 
@@ -122,6 +122,32 @@ print(graph.status, graph.stop_reasons)
 This continues the resolution example using its ingested seed. Read the
 [traversal, budget and partial-result contract](src/research_bridge/knowledge_graph/README.md)
 before interpreting graph completeness.
+
+## Explore incoming or combined citations
+
+```sh
+uv run research-bridge explore W2741809807 --mode incoming --depth 2
+uv run research-bridge explore W2741809807 --mode both --depth 3 --max-requests 100
+curl -X POST http://localhost:8000/v1/graphs/explore -H 'Content-Type: application/json' -d '{"identifier":"W2741809807","mode":"both","limits":{"depth":2}}'
+```
+
+```python
+from research_bridge.knowledge_graph.application import ExploreCitations, ExplorationLimits
+
+graph = asyncio.run(
+    ExploreCitations(OpenAlexPaperAdapter()).execute(
+        "W2741809807", ExplorationLimits(depth=2), mode="both"
+    )
+)
+print(graph.mode, graph.status, graph.unread_incoming_pages)
+```
+
+Modes are `outgoing` (default), `incoming` and `both`. Edges always point from
+citing to referenced paper. Combined traversal processes outgoing references then
+incoming pages at each expanded node, using one shared budget. Incoming page
+failures preserve earlier records and identify the interrupted page. See the
+[direction and pagination contract](src/research_bridge/knowledge_graph/README.md#incoming-and-combined-traversal).
+Existing `ExploreOutgoing` imports and `/v1/graphs/outgoing` remain supported.
 
 ## Checks and packaging
 
