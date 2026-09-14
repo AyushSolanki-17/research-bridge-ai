@@ -206,9 +206,43 @@ uv run --extra server mypy
 uv run --extra server pytest
 uv run --extra server python scripts/export_openapi.py --check
 uv build
+uv run python scripts/verify_distribution.py
 ```
 
-Tests cover API behavior, side-effect-free imports and inward layer dependencies. `uv build` creates the wheel and source distribution.
+Tests cover API behavior, side-effect-free imports and inward layer dependencies.
+The complete offline journey uses a synthetic HTTP provider with the real OpenAlex
+adapter: paginated ambiguous titles → explicit selection → every direction at
+1–3 hops → filtered paper and citation evidence inspection. It also checks DOI
+entry, exhausted requests, unresolved references and failure after an incoming page.
+Run it alone with `uv run --extra server pytest tests/test_complete_journey.py`.
+Existing capability tests cover exact count/time limits, cancellation and retries.
+
+`uv build` creates the wheel and source distribution, including the source archive's
+usage documentation and verification fixtures. Verify the built wheel in a fresh
+environment, without FastAPI, Uvicorn, Starlette or pytest (POSIX shell):
+
+```sh
+core_check_dir=$(mktemp -d)
+uv venv "$core_check_dir/venv" --python 3.13
+uv pip install --python "$core_check_dir/venv/bin/python" dist/research_bridge_core-0.1.0-py3-none-any.whl
+"$core_check_dir/venv/bin/python" -I "$PWD/tests/offline_journey.py" --require-core-only
+```
+
+The standalone check exercises documented application imports and actual installed
+CLI processes. `-I` prevents the checkout or `PYTHONPATH` from providing the library.
+It uses only an ephemeral loopback HTTP server; dependency installation may need
+network access. CI runs this same clean-install check after building the package.
+`verify_distribution.py` checks archive boundaries, source parity, optional server
+dependencies, console entrypoints and local documentation file links.
+
+Offline verification establishes behavior against synthetic provider responses.
+A separate bounded live smoke and manual container check passed on 2026-09-13;
+see [dated verification evidence](docs/verification.md) for commands, outcomes and
+limitations. This does not guarantee provider availability or corpus coverage. Provider order and metadata can change;
+filters only select within the acquired neighborhood, exact names do not establish
+author identity, and evidence links identify live records rather than archived
+payloads. See [provider limitations](src/research_bridge/ingestion/openalex/README.md)
+and [graph completeness](src/research_bridge/knowledge_graph/README.md).
 
 Export intentional API changes with `uv run --extra server python scripts/export_openapi.py`. CI checks snapshot drift; compatibility with prior published releases must be added when releases exist. The current `0.1.0` is a local development version, not a published release.
 
@@ -219,7 +253,36 @@ docker build -t research-bridge-ai:local .
 docker run --rm -p 8000:8000 research-bridge-ai:local
 ```
 
-The image uses the frozen uv lockfile and runs under an unprivileged user. `/health` reports process availability, not database/provider readiness. GitHub CI checks and builds the image; it does not deploy or publish it.
+The image uses the frozen uv lockfile and runs under an unprivileged user. `/health`
+reports process availability, not database/provider readiness. To verify actual
+server startup, HTTP journeys, installed CLI commands and graceful shutdown:
+
+```sh
+uv run --extra server python tests/runtime_smoke.py
+docker run --rm --network none \
+  --mount "type=bind,source=$PWD/tests,target=/verification,readonly" \
+  --entrypoint /app/.venv/bin/python research-bridge-ai:local /verification/runtime_smoke.py --require-unprivileged
+```
+
+The container smoke check uses its installed application, a read-only fixture mount
+and loopback HTTP. `--network none` prevents external acquisition. It checks served
+docs/schema, all directions/depths, filtering/evidence, invalid input, partial
+failures and the server's completed shutdown after SIGTERM. CI builds and runs this
+check as the image's unprivileged user; it does not deploy or publish the image.
+
+For manual inspection, run the normal container with a localhost-only published
+port, then inspect health and use the interactive API documentation:
+
+```sh
+docker run --rm -p 127.0.0.1:8000:8000 research-bridge-ai:local
+# In another terminal:
+curl --fail http://localhost:8000/health
+# Open http://localhost:8000/docs and execute the documented research requests.
+```
+
+Research requests in the normal container access live OpenAlex. Keep explicit small
+limits when checking it manually and inspect `status`/`stop_reasons`; bounded
+truncation is expected for large neighborhoods. Stop the container after inspection.
 
 ## Project guide
 

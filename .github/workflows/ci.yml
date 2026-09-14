@@ -20,4 +20,15 @@ jobs:
       - run: uv run --extra server pytest
       - run: uv run --extra server python scripts/export_openapi.py --check
       - run: uv build
+      - run: uv run python scripts/verify_distribution.py
+      - name: Verify core wheel without the server stack
+        run: |
+          uv venv "$RUNNER_TEMP/core-check" --python 3.13
+          uv pip install --python "$RUNNER_TEMP/core-check/bin/python" dist/research_bridge_core-0.1.0-py3-none-any.whl
+          "$RUNNER_TEMP/core-check/bin/python" -I "$PWD/tests/offline_journey.py" --require-core-only
       - run: docker build --tag app-check .
+      - name: Verify running container
+        run: |
+          docker run --rm --network none \
+            --mount "type=bind,source=$PWD/tests,target=/verification,readonly" \
+            --entrypoint /app/.venv/bin/python app-check /verification/runtime_smoke.py --require-unprivileged

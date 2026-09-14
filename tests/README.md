@@ -18,3 +18,15 @@ Use synthetic providers and HTTP transports for deterministic acquisition outcom
 Inject monotonic clocks for elapsed boundaries and schedule cancellation without
 wall-clock sleeps. Static checks do not prove runtime-import or cross-capability
 correctness. Run the complete README checks before completing executable changes.
+
+`test_complete_journey.py` runs the full search/selection/graph/filter/evidence path
+through HTTP, the library and installed CLI processes with real adapter translation.
+Its synthetic server and standalone library/CLI check live in `offline_journey.py`;
+that file needs no pytest or web stack and is reused for the
+[clean wheel installation check](../README.md#checks-and-packaging).
+
+`runtime_smoke.py` is an opt-in process smoke check, separate from pytest. It launches
+the installed API command, exercises real HTTP sockets and the installed CLI,
+then verifies completed SIGTERM shutdown. Run it on the host or inside the image
+with networking disabled using the [container commands](../README.md#container).
+It reuses the existing synthetic provider and evidence assertions.
