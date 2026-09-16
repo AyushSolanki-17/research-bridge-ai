@@ -106,7 +106,8 @@ The [pagination contract](https://help.openalex.org/api/paging/) supports `curso
 null as end, and fails on missing/malformed pagination metadata or malformed work
 identities. It reuses singleton metadata translation and physical HTTP accounting.
 Search credentials, retry settings and data attribution follow the configuration above.
-No live search request was made during verification.
+The initial implementation was verified offline. A bounded live search subsequently
+passed on 2026-09-13; see [dated verification evidence](../../../../docs/verification.md).
 
 ## Incoming citation pages (checked 2026-09-10)
 
@@ -120,4 +121,11 @@ is preserved. Metadata and evidence use the existing singleton translator.
 Knowledge graph verifies each citing record's reference assertion and controls
 deduplication, repeated cursors and shared exploration limits. Incoming pages reuse
 the same credentials, timeout, redirect and retry policy. Verification is offline;
-live incoming acquisition has not been tested.
+a separate bounded incoming smoke passed on 2026-09-13 as recorded in the
+[verification evidence](../../../../docs/verification.md).
+
+Access, singleton lookup, title search, cursor paging and citation recipe guidance
+were rechecked against the linked official documentation on 2026-09-13; the
+implemented operations remain compatible. The live smoke used no API key and
+small explicit bounds. It does not establish authenticated access, sustained
+availability or corpus completeness.

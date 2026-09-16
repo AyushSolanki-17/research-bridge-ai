@@ -1,6 +1,6 @@
 # Architecture
 
-Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoing citation neighborhoods through the same application use cases. OpenAlex acquisition counts physical requests, redirects and retries against operation budgets. Knowledge graph owns breadth-first traversal, directed edges, evidence and partial-result semantics. API assembly and CLI compose the provider; HTTP schemas and error mapping stay in `api/`. Title candidate search is owned by the paper application through a separate search port; the OpenAlex adapter reuses bounded HTTP acquisition and canonical metadata translation. Stateless public pages replay and deduplicate provider cursor pages. See [runtime commands](../README.md).
+Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoing, incoming and combined citation neighborhoods with metadata filtering through the same application use cases. OpenAlex acquisition counts physical requests, redirects and retries against operation budgets. Knowledge graph owns breadth-first traversal, directed edges, evidence and partial-result semantics. API assembly and CLI compose the provider; HTTP schemas and error mapping stay in `api/`. Title candidate search is owned by the paper application through a separate search port; the OpenAlex adapter reuses bounded HTTP acquisition and canonical metadata translation. Stateless public pages replay and deduplicate provider cursor pages. See [runtime commands](../README.md).
 
 ## Source layout
 
@@ -83,9 +83,17 @@ Reserve `packages/` for a proven independently installable library with its own 
 
 Research may depend on stable provenance value types. Knowledge graph may depend on research and provenance. Ingestion coordinates writes through supported research and graph application contracts; those lower layers never import ingestion. Keep one canonical paper model and map it into graph representations. Source attribution belongs in provenance; acquisition belongs in ingestion.
 
-## First implementation
+## Capability verification
 
-Follow [next steps](next-steps.md) for the seed resolution and bounded citation explorer milestone and [coding style](coding-style.md) for OOP and design guidance.
+Complete offline journeys exercise the real OpenAlex adapter through a synthetic
+HTTP provider, the library, HTTP routes and installed CLI processes. A clean wheel
+check runs the library and CLI without optional server dependencies. These checks
+prove fixture-scoped behavior. An opt-in process smoke runs the installed API/CLI
+inside the image with external networking disabled. A separate dated live smoke
+and manual container inspection are recorded in [verification evidence](verification.md);
+none of these checks establishes corpus completeness or production load capacity.
+
+Follow [next steps](next-steps.md) for acceptance evidence and remaining limitations and [coding style](coding-style.md) for OOP and design guidance.
 
 ## Result filtering and evidence inspection
 

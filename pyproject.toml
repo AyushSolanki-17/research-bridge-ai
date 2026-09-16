@@ -26,7 +26,11 @@ packages = ["src/research_bridge"]
 exclude = ["**/README.md"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/scripts", "/contracts", "/pyproject.toml", "/README.md", "/uv.lock", "/.python-version"]
+include = [
+    "/src", "/tests", "/scripts", "/contracts", "/docs", "/.agents/skills",
+    "/pyproject.toml", "/README.md", "/CONTRIBUTING.md", "/AGENTS.md",
+    "/uv.lock", "/.python-version", "/Dockerfile", "/.dockerignore", "/.env.example",
+]
 exclude = ["**/__pycache__", "**/*.pyc"]
 
 [tool.pytest.ini_options]

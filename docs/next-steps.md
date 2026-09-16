@@ -4,7 +4,7 @@ Status: identifier resolution and bounded outgoing, incoming and combined citati
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Complete-journey and installable-package verification is next and remains unassigned and not started. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Implement these tasks in order; each depends on the preceding task's verified output. Complete-journey and installable-package verification is complete (2026-09-13); the original capability tasks have acceptance evidence below. Runtime and distribution follow-ups are also verified as recorded below. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
 
@@ -238,6 +238,39 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Owner:** API/CLI entrypoints and capability owners.
 
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-13).
+
+   Evidence: `tests/test_complete_journey.py` and `tests/offline_journey.py` use a
+   synthetic loopback HTTP provider with the real OpenAlex adapter. Library, HTTP
+   and actual installed CLI journeys cover paginated ambiguous titles, explicit
+   selection, all three directions at depths 1–3, traversal beyond an excluded
+   intermediate, filtered paper inspection and fixture-backed citation evidence.
+   DOI entry, request exhaustion, unresolved references and upstream HTTP failure
+   after an incoming page are verified. Existing capability tests supply exact
+   count/time boundaries, duplicate pages, cancellation and retry coverage.
+
+   Verification: `uv run ruff check .`, `uv run ruff format --check .`,
+   `uv run --extra server mypy`, `uv run --extra server pytest` (244 passed),
+   `uv run --extra server python scripts/export_openapi.py`, its `--check` mode,
+   and `uv build` passed. The exported API contract is unchanged. A fresh wheel
+   installation ran `python -I tests/offline_journey.py --require-core-only`
+   using the checkout fixture's absolute path and the temporary environment's
+   interpreter; FastAPI, Starlette, Uvicorn and pytest were absent. CI now runs
+   the documented clean-install check after building.
+
+   Review found omitted documentation in the source archive. Its manifest now
+   includes linked repository documentation/guidance and documented container/env
+   inputs; every local Markdown file target in the archive resolves. Wheel paths,
+   dependency metadata, console entrypoints, source ownership, naming/docstrings
+   and changed documentation links were reviewed. No runtime API, dependency or
+   database migration change is introduced.
+
+   Limitations: two existing dependency deprecation warnings remain. The documented
+   Docker build was attempted but could not connect to the local daemon. Live
+   OpenAlex and deployment were not tested; no package or container was published.
+   Provider ordering/metadata can change, filters cover only acquired records,
+   names do not disambiguate authors, and evidence does not archive source payloads.
+
    **After this task:** A developer can install the built package and reproduce the documented complete journey, with offline checks proving behavior and limitations clearly recorded.
 
    **Deliverable:** a verified citation exploration backend with accurate usage documentation and recorded completion evidence.
@@ -252,7 +285,7 @@ The deliverable is seed → bounded citation graph → evidence through the libr
 
    **Verification:** run all commands in [README checks and packaging](../README.md#checks-and-packaging). Inspect changed documentation links. Record failures rather than weakening checks.
 
-Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. All citation directions and filters are implemented; complete-journey verification remains required. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
+Completion requires all seven tasks to meet their acceptance criteria, the complete offline journey and required README checks to pass, and documentation to reflect actual behavior. All citation directions, filters and complete offline journeys are verified; container execution and a bounded live smoke are now verified in the runtime follow-ups below. Report optional live smoke tests separately. Do not mark scaffolding as complete. Commits, publication and deployment require an explicit request.
 
 
 ## Implementation and developer-experience review
@@ -278,4 +311,53 @@ The HTTP schema is unchanged and no migration is needed. Gapped abstracts now
 remain unknown rather than exposing incomplete text as a reconstructed abstract.
 Two existing dependency deprecation warnings remain. Live-provider acquisition and
 Docker were not tested in this review. Incoming/combined exploration was subsequently
-implemented as recorded above, followed by filtering; complete-journey verification remains pending.
+implemented as recorded above, followed by filtering and complete-journey verification.
+
+## Runtime and distribution follow-ups
+
+1. **Verify server and container execution**
+
+   **Owner:** API/CLI entrypoints and runtime verification.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-13).
+   Add an offline smoke check that launches the installed API process, exercises
+   actual HTTP sockets and CLI processes, checks validation/partial responses,
+   and verifies graceful shutdown. Run it inside the built image as its existing
+   unprivileged user and in CI. Manually inspect the published container's health,
+   API documentation and research responses.
+
+   Evidence: `tests/runtime_smoke.py` passed on the host and inside the built image
+   as UID 10001 with external networking disabled. Chrome Swagger execution and
+   direct HTTP checks passed against the published container. Graceful shutdown
+   and exit status were checked. CI now runs the container smoke after building.
+   See [runtime evidence and the local Docker workaround](verification.md).
+
+2. **Verify live provider compatibility**
+
+   **Owner:** `ingestion/openalex` and capability documentation.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-13).
+   Recheck official access/search/pagination documentation and run a small bounded
+   live search, explicit selection, DOI lookup and all traversal directions.
+   Inspect returned metadata and citation source assertions. Record request limits,
+   results and any live-only limitations separately from the offline test gate.
+
+   Evidence: unauthenticated DOI lookup, ambiguous title search/selection and all
+   three graph modes passed with small explicit limits. Citation assertions were
+   inspected against returned citing records. Each graph honestly reported node
+   truncation. [Live observations and limitations](verification.md#bounded-live-openalex-observations)
+   are dated separately; live availability remains outside the normal test gate.
+
+3. **Guard installable archive contents**
+
+   **Owner:** root distribution, scripts and CI.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-13).
+   Turn the prior source-archive omission check into a repeatable artifact check:
+   verify source/wheel membership, documented local links, runtime metadata and
+   matching packaged source. Run the check after builds and verify a fresh install
+   from the source distribution without the optional server stack.
+
+   Evidence: `scripts/verify_distribution.py` passed and is now in CI. Deliberately
+   damaged archives with missing docs, changed code and mandatory server packages
+   were rejected. A clean source-distribution installation passed the extracted
+   library/CLI journey without FastAPI, Starlette, Uvicorn or pytest. All README
+   checks passed, including 244 tests; two existing dependency warnings remain.
+   See [verification results](verification.md).
