@@ -1,5 +1,49 @@
 # Backend verification evidence
 
+## Adapter error handling verification 2026-09-17
+
+Completed the code-quality follow-up identified in the maintenance review below.
+Identifier parsing now catches only `InvalidIdentifierError`; singleton lookup no
+longer catches every translation exception. Lookup, title search and incoming
+pages preserve expected malformed-data handling while propagating unexpected
+programming errors unchanged. No new abstraction, dependency or migration was
+introduced, and the HTTP schema is unchanged. Unexpected defects are now visible
+to library callers instead of becoming missing metadata or provider errors.
+
+Added 27 regression cases across all three public acquisition operations. Before
+the fix, 13 cases failed because defects were swallowed or reclassified; all 27
+pass after it. Cases cover missing/invalid required work IDs, invalid DOI and
+reference values, valid DOI fallback, explicit incomplete references, and injected
+defects in required identity, primary/fallback DOI, reference and abstract parsing.
+
+| Check | Python 3.13.13 | Python 3.14.4 |
+| --- | --- | --- |
+| Frozen dependency sync and interpreter assertion | Passed | Passed |
+| Ruff lint and formatting | Passed; 71 formatted files | Passed; 71 formatted files |
+| Strict mypy with matching Python target | Passed; 25 source files | Passed; 25 source files |
+| Full offline pytest suite | 271 passed, 1 upstream warning | 271 passed, 1 upstream warning |
+| OpenAPI drift | Passed | Passed |
+| Fresh core wheel and source-archive journeys | Both passed | Both passed |
+| Host process smoke | Passed | Passed |
+
+Commands used the [README checks](../README.md#checks-and-packaging) with explicit
+interpreter environments and `--frozen`; pytest used `-q`. Clean installations used
+exported frozen core constraints and `-I --require-core-only`. Source journeys ran
+from the extracted archive. Host smoke used `uv run --frozen --extra server python
+tests/runtime_smoke.py` and verified real HTTP, API documentation, every citation
+mode/depth, installed CLI execution and graceful shutdown. `uv build` and the
+distribution checker passed with 78 source files and 29 wheel files.
+
+The final diff was reviewed for error semantics, naming, Google-style docstrings,
+scope and whitespace. The adapter exception-handling finding is resolved. The
+previously documented upstream Starlette alias warning remains unsuppressed.
+
+Docker verification was attempted, but the daemon was unavailable. Starting
+Docker Desktop reached an administrator setup request for privileged port/socket
+configuration; the daemon still could not be reached. No new container build or
+smoke result is claimed. Remote CI, live OpenAlex, publication and deployment were
+not run. Earlier dated container evidence remains unchanged.
+
 ## Maintenance verification 2026-09-17
 
 Implemented the queued dependency, source-installation and Python compatibility
@@ -92,6 +136,7 @@ or application dependency was needed.
   expected identifier exceptions and make malformed-payload handling consistent,
   with tests separating invalid input from unexpected defects. This pre-existing
   issue was reviewed without expanding the maintenance change into a refactor.
+  It was subsequently fixed and verified in the adapter follow-up above.
 - **LOW — upstream test-client deprecation:** Starlette's alias warning remains
   the dependency-maintenance blocker described above. Adopt a compatible released
   fix and rerun both interpreter suites when it becomes available.

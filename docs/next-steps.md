@@ -28,6 +28,10 @@ upstream Starlette alias warning remains on both versions. See
 [maintenance verification](verification.md#maintenance-verification-2026-09-17)
 for the dependency changes, review findings and remaining blocker.
 
+The adapter review follow-up is also complete: both interpreters now pass 271
+tests and host runtime smoke checks. See
+[adapter verification](verification.md#adapter-error-handling-verification-2026-09-17).
+
 ## Next assignments
 
 These assignments maintain the implemented citation explorer and are assigned to
@@ -130,6 +134,21 @@ capabilities do not need to be implemented again.
      supported versions, and document any required compatibility correction.
    - Record actual per-version outcomes. An unrun or failing interpreter remains
      unverified; adding workflow configuration alone does not complete this task.
+
+4. **Preserve unexpected adapter translation errors**
+
+   **Owner:** `ingestion/openalex` payload translation.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-17).
+
+   Replaced broad identifier catches with `InvalidIdentifierError` and removed
+   singleton lookup's catch-all translation wrapper. Expected malformed metadata
+   keeps its documented outcome; programming errors propagate consistently across
+   lookup, title search and incoming pages. No new abstraction or dependency was
+   required. The 27 regression cases reproduced 13 failures before the fix and
+   all pass after it. Both Python versions pass 271 tests, lint/format, types,
+   OpenAPI, clean wheel/source journeys and host process smoke. Docker remains
+   unverified because its daemon could not start without administrator setup.
+   See [acceptance evidence](verification.md#adapter-error-handling-verification-2026-09-17).
 
 For each assignment, move queued → in progress → verified only as evidence permits.
 Use blocked with a concrete reason when necessary. Update this tracker and
