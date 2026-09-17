@@ -23,7 +23,10 @@ correctness. Run the complete README checks before completing executable changes
 through HTTP, the library and installed CLI processes with real adapter translation.
 Its synthetic server and standalone library/CLI check live in `offline_journey.py`;
 that file needs no pytest or web stack and is reused for the
-[clean wheel installation check](../README.md#checks-and-packaging).
+[clean wheel and source installation checks](../README.md#checks-and-packaging).
+CI runs these journeys and the offline suite on Python 3.13 and 3.14 with frozen
+dependencies. Source-install checks use the journey extracted from the built
+archive; isolated Python and core-only assertions prevent checkout/server imports.
 
 `runtime_smoke.py` is an opt-in process smoke check, separate from pytest. It launches
 the installed API command, exercises real HTTP sockets and the installed CLI,
