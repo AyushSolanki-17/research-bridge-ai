@@ -49,6 +49,18 @@ passes one budget through the entire operation. Per-attempt timeouts and retry
 waits are capped by its remaining elapsed allowance. Budget exhaustion raises
 `AcquisitionLimitReached`; it is never retried as an upstream failure.
 
+## Implementation map
+
+- `infrastructure/openalex_adapter.py` implements lookup, title search and incoming
+  acquisition, HTTP retries, redirects and client ownership.
+- `infrastructure/translation.py` contains pure work/abstract conversion into
+  canonical metadata and source evidence. It performs no network requests.
+- `infrastructure/settings.py` validates environment-backed configuration.
+
+The adapter's existing `reconstruct_abstract` import remains available as a
+compatibility re-export. New translation changes and fault-injection tests should
+use the translation module directly.
+
 ## Payload handling
 
 - Missing optional fields (title, publication date, venue, abstract,

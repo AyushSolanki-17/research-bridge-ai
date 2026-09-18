@@ -5,7 +5,7 @@ from typing import NoReturn
 import httpx
 import pytest
 
-from research_bridge.ingestion.openalex.infrastructure import openalex_adapter
+from research_bridge.ingestion.openalex.infrastructure import translation
 from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
 from research_bridge.ingestion.openalex.infrastructure.settings import OpenAlexSettings
 from research_bridge.research.papers.application import AcquisitionBudget, ResolvedPaper
@@ -111,7 +111,7 @@ async def test_unexpected_translation_defect_propagates(
         def broken_abstract(value: object) -> NoReturn:
             raise defect
 
-        monkeypatch.setattr(openalex_adapter, "reconstruct_abstract", broken_abstract)
+        monkeypatch.setattr(translation, "reconstruct_abstract", broken_abstract)
     else:
         parser = Doi if field in ("doi", "ids") else OpenAlexWorkId
         original_parse = parser.parse
