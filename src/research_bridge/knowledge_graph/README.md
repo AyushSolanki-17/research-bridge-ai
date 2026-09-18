@@ -65,7 +65,7 @@ Tests in `tests/knowledge_graph` cover hop depth, direction, evidence, cycles,
 merges, exact limits, controlled elapsed time, missing data and partial failures.
 `tests/ingestion/openalex/test_operation_budget.py` verifies physical HTTP
 accounting for retries and redirects. HTTP and CLI call these same contracts;
-see the [runtime examples](../../../README.md).
+see the [runtime examples](../../../docs/usage.md).
 
 See [architecture](../../../docs/architecture.md).
 
@@ -165,4 +165,4 @@ Follow `source_url` to inspect the provider record supporting the assertion. The
 source may change after observation; evidence is attribution, not an archived
 payload. No new lookup, server-side graph session or raw provider object is needed
 to inspect the returned metadata and source attribution. See the
-[filter and inspection examples](../../../README.md#filter-results-and-inspect-evidence).
+[filter and inspection examples](../../../docs/usage.md#filter-results-and-inspect-evidence).

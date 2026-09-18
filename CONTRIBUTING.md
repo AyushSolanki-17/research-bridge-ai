@@ -1,5 +1,25 @@
 # Contributing
 
+## Change workflow
+
+1. Follow the [development setup](docs/development.md#setup) and run `make check`
+   to establish a baseline. Use the [source map](src/research_bridge/README.md) to
+   locate the behavior and its tests.
+2. State the requested behavior, owner, acceptance criteria and smallest useful
+   slice. Read the capability contract and [extension guide](docs/extending.md).
+3. Add or update focused behavioral checks, implement the slice and inspect its
+   diff. Keep business rules with their owner and compose dependencies at entrypoints.
+4. Run `make check`, `make install-check` and `make smoke` for executable changes.
+   Use the container check for container changes. Document commands actually run,
+   remaining limits and any public compatibility impact.
+5. Review naming, Google-style documentation, unnecessary abstractions and changed
+   contracts. Submit a focused PR using the repository template.
+
+Human and agent contributions use the same workflow. Point coding tools to
+[AGENTS.md](AGENTS.md); do not maintain divergent copies of its rules.
+
+## Commit and review conventions
+
 Use Conventional Commits for commits and PR titles, for example:
 
 ```text

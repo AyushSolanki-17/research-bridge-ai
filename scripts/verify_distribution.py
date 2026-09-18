@@ -55,6 +55,7 @@ def verify_distribution(dist_dir: Path) -> None:
         str(path.relative_to(ROOT / "src")): path.read_bytes()
         for path in (ROOT / "src/research_bridge").rglob("*.py")
     }
+    expected["research_bridge/py.typed"] = (ROOT / "src/research_bridge/py.typed").read_bytes()
     actual = {path: data for path, data in wheel.items() if path.startswith("research_bridge/")}
     if actual != expected:
         raise ValueError("Wheel code differs from checkout source")

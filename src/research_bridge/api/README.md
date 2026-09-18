@@ -55,7 +55,7 @@ Every unresolved edge target is identified in the graph's `unresolved` entries.
 `tests/test_research_journeys.py` compares library, HTTP and CLI output against the
 same deterministic provider, including truncation, partial failures and safe errors.
 The independent command-line entrypoint lives in `research_bridge/cli.py`.
-See the [runtime commands](../../../README.md).
+See the [runtime commands](../../../docs/usage.md).
 
 ## Title candidate search
 

@@ -39,4 +39,4 @@ Inspect `nodes[].evidence` and `edges[].evidence` in HTTP/CLI JSON; match a cita
 `source` and `target` to retained node identifiers. `referenced_id` preserves the
 original assertion even when its target was merged. Source URLs identify live
 provider records, whose contents may change after `observed_at`; no historical
-payload archive is implied. See the [inspection examples](../../../README.md#filter-results-and-inspect-evidence).
+payload archive is implied. See the [inspection examples](../../../docs/usage.md#filter-results-and-inspect-evidence).

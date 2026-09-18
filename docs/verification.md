@@ -1,5 +1,59 @@
 # Backend verification evidence
 
+## Developer experience verification 2026-09-18
+
+Reviewed code ownership, navigation, contributor/agent instructions, local checks,
+CI, packaging and installed consumer typing. The original frozen baseline passed
+271 tests. See the [DX review](dx-review.md) for findings and design decisions.
+
+The changes split pure OpenAlex payload translation from HTTP acquisition, enforce
+additional documented dependency boundaries, ship inline typing metadata, share
+local/CI check and installation targets, and reorganize documentation by reader
+intent. The initial 364-line README is now 105 lines; the current-work guide is
+49 lines, with the original completion evidence retained in implementation history.
+
+| Check | Python 3.13.13 | Python 3.14.4 |
+| --- | --- | --- |
+| Frozen development/server sync | Passed | Passed in a separate environment |
+| `make check` (Ruff lint/format, strict mypy, pytest, OpenAPI drift) | Passed; 293 tests, 1 upstream warning | Passed; 293 tests, 1 upstream warning |
+| `make install-check` (build, archive inspection, isolated installations) | Wheel and source passed | Wheel and source passed |
+| Installed consumer type assertions | Passed against both artifacts | Passed against both artifacts |
+| `make smoke` | Real HTTP, docs, CLI and shutdown passed | Real HTTP, docs, CLI and shutdown passed |
+
+The OpenAlex-focused suite passed all 79 tests after extraction. Architecture checks
+now contain 23 cases, including rejection/acceptance examples and relative imports.
+Strict mypy checks 26 source files. Public OpenAPI remains byte-for-byte unchanged.
+
+The new installation verifier uses the frozen core constraints and fresh temporary
+environments, runs the library/CLI journey with `-I --require-core-only`, and checks
+the source journey extracted from the archive. It asserts selected interpreter
+versions and absence of FastAPI, Starlette, Uvicorn and pytest. Mypy checks a copied
+consumer outside the checkout against each installed interpreter. Archive inspection
+passed with 90 source files and 31 wheel files, including `py.typed`.
+
+Python 3.13 used the default development environment. Python 3.14 used
+`UV_PROJECT_ENVIRONMENT` pointing to a new temporary environment and
+`make setup check install-check smoke PYTHON_VERSION=3.14`. Ruby's YAML parser
+accepted the workflow and asserted the two-version matrix. A separate AST inspection
+found no static module import cycles in the 26 source modules. These checks do not
+prove dynamic-import behavior. Source and documentation diffs were reviewed for
+ownership, naming, Google-style documentation, compatibility and unnecessary code.
+All 186 local Markdown file/heading links across 32 documents resolved;
+`git diff --check` passed. Archives were rebuilt and rechecked after the final
+documentation/comment review.
+
+Docker connectivity was checked with `docker info --format '{{.ServerVersion}}'`;
+it could not connect to the local daemon. No container build or smoke was run in
+this review. CI retains the container check, but remote CI has not been executed.
+The existing Starlette `anyio.abc.BlockingPortal` deprecation remains visible on
+both interpreters; no dependencies or warning filters changed. Live OpenAlex,
+Windows execution, publication and deployment were not tested.
+
+No public research API, CLI flag, supported Python version or database schema
+changed. Existing adapter and abstract-reconstruction imports remain available;
+the private payload translator and its fault-injection test hook moved to the
+translation module. Installed consumers can now use the shipped type information.
+
 ## Adapter error handling verification 2026-09-17
 
 Completed the code-quality follow-up identified in the maintenance review below.

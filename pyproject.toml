@@ -36,7 +36,8 @@ exclude = ["**/README.md"]
 include = [
     "/src", "/tests", "/scripts", "/contracts", "/docs", "/.agents/skills",
     "/pyproject.toml", "/README.md", "/CONTRIBUTING.md", "/AGENTS.md",
-    "/uv.lock", "/.python-version", "/Dockerfile", "/.dockerignore", "/.env.example",
+    "/uv.lock", "/.python-version", "/Makefile", "/.editorconfig",
+    "/Dockerfile", "/.dockerignore", "/.env.example",
 ]
 exclude = ["**/__pycache__", "**/*.pyc"]
 

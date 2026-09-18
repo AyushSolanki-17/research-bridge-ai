@@ -2,6 +2,10 @@ name: CI
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -13,6 +17,7 @@ jobs:
         python: ["3.13", "3.14"]
     env:
       UV_PYTHON: ${{ matrix.python }}
+      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -23,29 +28,10 @@ jobs:
       - name: Verify selected interpreter
         run: |
           uv run --frozen --extra server python -c 'import sys; print(sys.version); assert f"{sys.version_info.major}.{sys.version_info.minor}" == "${{ matrix.python }}"'
-      - run: uv run --frozen ruff check .
-      - run: uv run --frozen ruff format --check .
-      - run: uv run --frozen --extra server mypy --python-version "${{ matrix.python }}"
-      - run: uv run --frozen --extra server pytest
-      - run: uv run --frozen --extra server python scripts/export_openapi.py --check
-      - run: uv build
-      - run: uv run --frozen python scripts/verify_distribution.py
-      - name: Export frozen core dependencies
-        run: uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "$RUNNER_TEMP/core-constraints.txt"
-      - name: Verify core wheel without the server stack
-        run: |
-          uv venv "$RUNNER_TEMP/core-check" --python "${{ matrix.python }}"
-          uv pip install --python "$RUNNER_TEMP/core-check/bin/python" --constraint "$RUNNER_TEMP/core-constraints.txt" dist/research_bridge_core-0.1.0-py3-none-any.whl
-          "$RUNNER_TEMP/core-check/bin/python" -c 'import sys; print(sys.version); assert f"{sys.version_info.major}.{sys.version_info.minor}" == "${{ matrix.python }}"'
-          "$RUNNER_TEMP/core-check/bin/python" -I "$PWD/tests/offline_journey.py" --require-core-only
-      - name: Verify core source archive without the server stack
-        run: |
-          uv venv "$RUNNER_TEMP/source-check" --python "${{ matrix.python }}"
-          uv pip install --python "$RUNNER_TEMP/source-check/bin/python" --constraint "$RUNNER_TEMP/core-constraints.txt" dist/research_bridge_core-0.1.0.tar.gz
-          "$RUNNER_TEMP/source-check/bin/python" -c 'import sys; print(sys.version); assert f"{sys.version_info.major}.{sys.version_info.minor}" == "${{ matrix.python }}"'
-          mkdir "$RUNNER_TEMP/source-archive"
-          tar -xzf dist/research_bridge_core-0.1.0.tar.gz -C "$RUNNER_TEMP/source-archive"
-          "$RUNNER_TEMP/source-check/bin/python" -I "$RUNNER_TEMP/source-archive/research_bridge_core-0.1.0/tests/offline_journey.py" --require-core-only
+      - name: Check code and contracts
+        run: make check
+      - name: Verify distributions and clean core installations
+        run: make install-check
       - if: matrix.python == '3.13'
         run: docker build --tag app-check .
       - name: Verify running container
