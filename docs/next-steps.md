@@ -27,8 +27,9 @@ When revisiting this item, reproduce it under the frozen dependencies, check
 current official upstream guidance, and attempt a targeted compatible update.
 Acceptance: remove the warning's cause without suppression or weakened assertions,
 preserve optional server dependencies and research contracts, and pass the code,
-contract and installation checks on both supported interpreters. Record an actual
-upstream blocker if no compatible release fixes it.
+contract and installation checks on the default Python 3.13. Check Python 3.14
+explicitly if the dependency change needs compatibility investigation. Record an
+actual upstream blocker if no compatible release fixes it.
 
 ## Developer experience review
 

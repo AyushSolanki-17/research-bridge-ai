@@ -77,7 +77,7 @@ make smoke
 OpenAPI drift. `make install-check` builds and inspects wheel/source archives, then
 checks clean core-only installations and installed consumer types. `make smoke`
 verifies API/CLI process behavior over local sockets. CI uses the same check and
-installation targets on Python 3.13 and 3.14.
+installation targets once on the default Python 3.13.
 
 Make is optional: [development commands](docs/development.md#development-loop)
 include direct uv equivalents, focused tests and debugging guidance. Use

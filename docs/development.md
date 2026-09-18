@@ -102,20 +102,17 @@ Archive inspection verifies that marker, source parity, optional server dependen
 console entrypoints and local documentation file links. The current `0.1.0` is a
 local development version, not a published release.
 
-CI runs `make check` and `make install-check` on Python 3.13 and 3.14, and builds and
-smokes the container once on 3.13. CI can also be started manually. Reproduce the
-interpreter checks in separate environments (POSIX shell):
+CI has one backend job on the default Python 3.13. It runs `make check`,
+`make install-check`, and the container build/smoke once. CI can also be started
+manually. Reproduce the local checks with:
 
 ```sh
-compatibility_check_dir=$(mktemp -d)
-for python_version in 3.13 3.14; do
-  UV_PROJECT_ENVIRONMENT="$compatibility_check_dir/python-$python_version" \
-    make setup check install-check smoke PYTHON_VERSION="$python_version"
-done
+make setup check install-check smoke
 ```
 
-Keep the printed temporary directory while diagnosing a failure; remove it when
-done. These commands do not alter `.python-version` or the default `.venv`.
+Python 3.14 remains available for explicit compatibility investigations using
+`PYTHON_VERSION=3.14`; it is not a duplicate CI gate. To keep that investigation
+separate from `.venv`, set `UV_PROJECT_ENVIRONMENT` to a temporary environment path.
 
 ## Troubleshooting
 

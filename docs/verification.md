@@ -1,5 +1,24 @@
 # Backend verification evidence
 
+## Single-interpreter CI verification 2026-09-19
+
+Removed the duplicate Python-version matrix at the user's request. CI now runs one
+backend job using `make setup` and the default Python 3.13. Code/contract checks,
+clean wheel/source installations, consumer typing and container build/smoke remain.
+Current contributor documentation matches this policy. Python 3.14 remains in the
+supported package range and is available for explicit local compatibility checks.
+
+Validation on Python 3.13.13: `make check install-check smoke` passed, including
+293 tests (one existing upstream warning), Ruff lint/format, strict mypy, OpenAPI
+drift, both isolated installation journeys, consumer typing, and real API/CLI
+startup/shutdown. Ruby parsed the workflow and asserted that there is exactly one
+job, no strategy/matrix, and unconditional setup, checks, build and container smoke.
+`git diff --check` passed. No runtime behavior, dependencies or schema changed.
+
+The preceding PR revision's two CI jobs passed on GitHub; those results predate
+this workflow simplification. This change's remote run is not yet verified here.
+Docker was not rerun locally. Earlier verification remains dated below.
+
 ## Developer experience verification 2026-09-18
 
 Reviewed code ownership, navigation, contributor/agent instructions, local checks,

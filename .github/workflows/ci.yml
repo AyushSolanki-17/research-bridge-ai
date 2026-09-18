@@ -11,31 +11,21 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.13", "3.14"]
-    env:
-      UV_PYTHON: ${{ matrix.python }}
-      PYTHON_VERSION: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.8"
           enable-cache: true
-      - run: uv sync --frozen --extra server --python "${{ matrix.python }}"
-      - name: Verify selected interpreter
-        run: |
-          uv run --frozen --extra server python -c 'import sys; print(sys.version); assert f"{sys.version_info.major}.{sys.version_info.minor}" == "${{ matrix.python }}"'
+      - name: Set up development environment
+        run: make setup
       - name: Check code and contracts
         run: make check
       - name: Verify distributions and clean core installations
         run: make install-check
-      - if: matrix.python == '3.13'
+      - name: Build container
         run: docker build --tag app-check .
       - name: Verify running container
-        if: matrix.python == '3.13'
         run: |
           docker run --rm --network none \
             --mount "type=bind,source=$PWD/tests,target=/verification,readonly" \
