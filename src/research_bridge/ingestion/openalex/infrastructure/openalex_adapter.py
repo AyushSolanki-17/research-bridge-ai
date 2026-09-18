@@ -29,7 +29,11 @@ from research_bridge.research.papers.application.errors import (
 )
 from research_bridge.research.papers.application.ports import ResolvedPaper
 from research_bridge.research.papers.application.search_papers import CandidatePage
-from research_bridge.research.papers.domain.identifiers import Doi, OpenAlexWorkId
+from research_bridge.research.papers.domain.identifiers import (
+    Doi,
+    InvalidIdentifierError,
+    OpenAlexWorkId,
+)
 from research_bridge.research.papers.domain.paper import (
     Author,
     Paper,
@@ -224,6 +228,9 @@ def _parse_venue(raw: Any) -> Venue | None:
 def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> ResolvedPaper:
     """Translate a validated OpenAlex work payload into canonical models.
 
+    Expected identifier failures follow the required/optional metadata rules.
+    Unexpected translation defects propagate to the caller for diagnosis.
+
     Args:
         payload: Decoded JSON dict for a single work.
         observed_at: Observation time for evidence.
@@ -241,7 +248,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
     # Payload id is a URL like https://openalex.org/W2741809807
     try:
         openalex_id = OpenAlexWorkId.parse(raw_id)
-    except Exception as exc:
+    except InvalidIdentifierError as exc:
         raise ProviderMalformedResponseError(f"malformed work id {raw_id!r}") from exc
 
     # DOI extraction
@@ -251,7 +258,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
     if isinstance(raw_doi, str) and raw_doi:
         try:
             doi_value = Doi.parse(raw_doi)
-        except Exception:
+        except InvalidIdentifierError:
             # Also try ids.doi
             doi_value = None
     if doi_value is None:
@@ -261,7 +268,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
             if isinstance(maybe_doi, str) and maybe_doi:
                 try:
                     doi_value = Doi.parse(maybe_doi)
-                except Exception:
+                except InvalidIdentifierError:
                     doi_value = None
 
     title: str | None = None
@@ -305,7 +312,7 @@ def _translate_payload(payload: dict[str, Any], *, observed_at: datetime) -> Res
                 continue
             try:
                 ref_ids.append(OpenAlexWorkId.parse(item))
-            except Exception:
+            except InvalidIdentifierError:
                 references_complete = False
                 continue
 
@@ -408,12 +415,7 @@ class OpenAlexPaperAdapter:
 
         try:
             payload = await self._fetch_with_retries(client, url, headers, str(identifier), budget)
-            try:
-                return _translate_payload(payload, observed_at=datetime.now(UTC))
-            except ProviderMalformedResponseError:
-                raise
-            except Exception as exc:
-                raise ProviderMalformedResponseError("malformed work payload") from exc
+            return _translate_payload(payload, observed_at=datetime.now(UTC))
         finally:
             if owns and client is not None:
                 await client.aclose()

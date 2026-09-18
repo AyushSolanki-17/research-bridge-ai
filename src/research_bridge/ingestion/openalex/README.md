@@ -90,6 +90,13 @@ The adapter distinguishes:
 
 Provider JSON never becomes a canonical model.
 
+Lookup, title search and incoming pages use the same translation rules. Missing
+or invalid required work IDs raise `ProviderMalformedResponseError`; invalid
+optional DOI values are omitted (with `ids.doi` tried as a fallback), and invalid
+references mark the reference list incomplete. Unexpected programming errors
+propagate unchanged instead of being classified as provider failures or silently
+discarded as missing metadata.
+
 Follow [architecture](../../../../docs/architecture.md).
 
 ## Title search (checked 2026-09-09)

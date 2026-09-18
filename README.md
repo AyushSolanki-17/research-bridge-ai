@@ -224,14 +224,50 @@ environment, without FastAPI, Uvicorn, Starlette or pytest (POSIX shell):
 ```sh
 core_check_dir=$(mktemp -d)
 uv venv "$core_check_dir/venv" --python 3.13
-uv pip install --python "$core_check_dir/venv/bin/python" dist/research_bridge_core-0.1.0-py3-none-any.whl
+uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "$core_check_dir/constraints.txt"
+uv pip install --python "$core_check_dir/venv/bin/python" --constraint "$core_check_dir/constraints.txt" dist/research_bridge_core-0.1.0-py3-none-any.whl
 "$core_check_dir/venv/bin/python" -I "$PWD/tests/offline_journey.py" --require-core-only
 ```
 
 The standalone check exercises documented application imports and actual installed
 CLI processes. `-I` prevents the checkout or `PYTHONPATH` from providing the library.
 It uses only an ephemeral loopback HTTP server; dependency installation may need
-network access. CI runs this same clean-install check after building the package.
+network access. Verify the source distribution in a separate fresh environment,
+using the journey shipped inside that archive:
+
+```sh
+source_check_dir=$(mktemp -d)
+uv venv "$source_check_dir/venv" --python 3.13
+uv export --frozen --no-dev --no-emit-project --no-hashes --output-file "$source_check_dir/constraints.txt"
+uv pip install --python "$source_check_dir/venv/bin/python" --constraint "$source_check_dir/constraints.txt" dist/research_bridge_core-0.1.0.tar.gz
+tar -xzf dist/research_bridge_core-0.1.0.tar.gz -C "$source_check_dir"
+"$source_check_dir/venv/bin/python" -I "$source_check_dir/research_bridge_core-0.1.0/tests/offline_journey.py" --require-core-only
+```
+
+CI runs both clean-install checks on Python 3.13 and 3.14 with core dependencies
+constrained to the frozen lockfile. Each matrix entry checks its interpreter,
+types, offline tests and OpenAPI drift; the container runs once on Python 3.13.
+The default development interpreter remains Python 3.13. To reproduce the matrix
+locally in separate environments (POSIX shell):
+
+```sh
+compatibility_check_dir=$(mktemp -d)
+for python_version in 3.13 3.14; do
+  export UV_PROJECT_ENVIRONMENT="$compatibility_check_dir/python-$python_version"
+  export UV_PYTHON="$python_version"
+  uv sync --frozen --extra server --python "$python_version"
+  uv run --frozen --extra server python -c 'import os, sys; print(sys.version); assert f"{sys.version_info.major}.{sys.version_info.minor}" == os.environ["UV_PYTHON"]'
+  uv run --frozen ruff check .
+  uv run --frozen ruff format --check .
+  uv run --frozen --extra server mypy --python-version "$python_version"
+  uv run --frozen --extra server pytest
+  uv run --frozen --extra server python scripts/export_openapi.py --check
+done
+unset UV_PROJECT_ENVIRONMENT UV_PYTHON
+```
+
+Run the wheel and source-install commands above with each version's `--python`
+value as well. The source journey must run from the extracted archive with `-I`.
 `verify_distribution.py` checks archive boundaries, source parity, optional server
 dependencies, console entrypoints and local documentation file links.
 
@@ -286,7 +322,8 @@ truncation is expected for large neighborhoods. Stop the container after inspect
 
 ## Project guide
 
-- [Citation Explorer tasks and acceptance criteria](docs/next-steps.md)
+- [Next assignments and current progress](docs/next-steps.md#next-assignments)
+- [Citation Explorer completion evidence](docs/next-steps.md#completed-capability-tasks)
 - [Product context](docs/product.md)
 - [Architecture](docs/architecture.md)
 - [Agent instructions](AGENTS.md)

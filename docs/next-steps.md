@@ -4,9 +4,159 @@ Status: identifier resolution and bounded outgoing, incoming and combined citati
 
 Read [repository instructions](../AGENTS.md), [product context](product.md), [architecture](architecture.md), [coding style](coding-style.md) and affected capability READMEs before implementation.
 
-Implement these tasks in order; each depends on the preceding task's verified output. Complete-journey and installable-package verification is complete (2026-09-13); the original capability tasks have acceptance evidence below. Runtime and distribution follow-ups are also verified as recorded below. Record assignee, status, acceptance evidence, actual check results and limitations under the descriptive task name as work proceeds. List numbers only order this document; use capability names in code, files, branches and commits.
+Start with the [next assignments](#next-assignments). The original capability tasks
+and runtime/distribution follow-ups are complete, with dated acceptance evidence
+preserved below. Record assignee, status, acceptance evidence, actual check results
+and limitations under the descriptive task name as work proceeds. List numbers
+only order this document; use capability names in code, files, branches and commits.
 
 The deliverable is seed → bounded citation graph → evidence through the library, HTTP and CLI. Visual graph interaction is outside this repository. No bulk corpus ingestion, durable database, additional provider, LLM or scoring is required. Citation edges describe references, not proven influence. “Attention Is All You Need” is an optional demo seed, never a hardcoded special case.
+
+## Progress reviewed 2026-09-17
+
+Reviewed local commit `c0fe1ab`; the working tree was clean before this documentation
+update. All seven capability tasks and all three runtime/distribution follow-ups
+have recorded completion evidence. The initial regression check passed 244 tests with
+the same two dependency deprecation warnings, plus lint, formatting, strict types
+and OpenAPI drift checks. See [initial verification](verification.md#progress-review-2026-09-17)
+for commands and limits. Earlier live/container observations remain dated 2026-09-13;
+they were not repeated today. No release or deployment has been verified by this review.
+
+The subsequent maintenance session verified 244 tests, lint, formatting, types,
+OpenAPI and clean wheel/source installations on Python 3.13.13 and 3.14.4. One
+upstream Starlette alias warning remains on both versions. See
+[maintenance verification](verification.md#maintenance-verification-2026-09-17)
+for the dependency changes, review findings and remaining blocker.
+
+The adapter review follow-up is also complete: both interpreters now pass 271
+tests and host runtime smoke checks. See
+[adapter verification](verification.md#adapter-error-handling-verification-2026-09-17).
+
+## Next assignments
+
+These assignments maintain the implemented citation explorer and are assigned to
+Codex. Dependency maintenance established the baseline before installation and
+Python compatibility work. An unreleased upstream deprecation fix does not prevent
+verification of that baseline. Each task records its own results; existing completed
+capabilities do not need to be implemented again.
+
+1. **Resolve test-client dependency deprecations**
+
+   **Owner:** root dependency manifest/lockfile and API test integration.
+   **Assignee:** Codex. **Status:** partially fixed; blocked on an upstream release
+   (2026-09-17).
+
+   Added development-only `httpx2>=2.13,<3`; the frozen suite passes 244 tests with
+   the httpx test-client warning resolved. Starlette 1.6.0 still evaluates
+   `anyio.abc.BlockingPortal`; a targeted compatible upgrade resolves to the same
+   release. The remaining alias warning is unsuppressed. No provider or public
+   HTTP contract changed. See [maintenance evidence](verification.md#maintenance-verification-2026-09-17).
+
+   **Original evidence:** the initial suite emitted a Starlette warning about its httpx test-client
+   integration and an AnyIO `BlockingPortal` alias deprecation. All tests pass;
+   these are compatibility maintenance items, not observed research failures.
+
+   **Smallest slice:** reproduce the warnings under the frozen dependency set,
+   inspect the responsible dependencies and their official migration guidance,
+   then make only the necessary compatible dependency/test-client changes.
+
+   **Acceptance criteria**
+
+   - Resolve both warning causes without warning suppression, skipped assertions,
+     or changes to research behavior. If no compatible upstream fix exists, record
+     the precise upstream blocker and leave the affected work incomplete.
+   - Preserve the optional server boundary and core-only library/CLI installation.
+     Do not replace the provider HTTP client solely to fix test tooling.
+   - Run the README checks, verify the clean installed journey, and record lockfile
+     changes and any remaining warnings. The HTTP contract must remain unchanged
+     unless a separately justified compatibility correction is necessary.
+
+2. **Verify source-distribution installation in CI**
+
+   **Owner:** root distribution, `.github/workflows/ci.yml` and installation checks.
+   **Assignee:** Codex. **Status:** implemented and locally verified (2026-09-17);
+   remote CI has not run.
+
+   CI now installs the generated source archive into its own core-only environment
+   and runs the extracted standalone journey with `-I --require-core-only`. Local
+   wheel and source installations passed on Python 3.13.13 and 3.14.4 using frozen
+   core dependency constraints; optional server packages and pytest were absent.
+   Archive checks and the single container build/smoke remain configured. README
+   commands reproduce these checks. See [maintenance evidence](verification.md#maintenance-verification-2026-09-17).
+
+   **Original evidence:** the source-distribution installation passed manually on 2026-09-13.
+   CI checked archive contents and a clean wheel installation, but did not install
+   the source distribution. Archive inspection alone cannot prove installation.
+
+   **Smallest slice:** extend the existing build job with a clean source-archive
+   installation and reuse `tests/offline_journey.py`; no new test framework is needed.
+
+   **Acceptance criteria**
+
+   - Build and install the generated source archive into a fresh environment,
+     without editable source or the optional server stack.
+   - Run the archive's extracted library/CLI journey with isolated Python and
+     `--require-core-only`. Prove the installed package supplies imports and commands;
+     FastAPI, Starlette, Uvicorn and pytest must be absent from that environment.
+   - Keep existing wheel, archive-content and container checks. Document a matching
+     local command and record actual local results separately from remote CI status.
+
+3. **Verify the declared Python compatibility range**
+
+   **Owner:** `pyproject.toml`, CI and installed-runtime verification.
+   **Assignee:** Codex. **Status:** implemented and locally verified (2026-09-17);
+   remote CI has not run.
+
+   Both interpreters passed frozen sync, 244 tests, lint/format, strict mypy with
+   their respective Python target, OpenAPI drift and clean wheel/source journeys.
+   CI asserts interpreter versions and runs the container only in the 3.13 entry.
+   The initial 3.14 run exposed deprecated policy calls in pytest-asyncio 0.26.0;
+   updating the development dependency to 1.4.0 removed those warnings without
+   changing tests. Both versions retain only the upstream Starlette warning.
+   The declared range and default interpreter are unchanged. See
+   [per-version evidence](verification.md#maintenance-verification-2026-09-17).
+
+   **Original evidence:** `requires-python = ">=3.13,<3.15"` declares Python 3.13 and 3.14
+   support, while `.python-version` and the earlier CI selected only Python 3.13.
+   This was a verification gap; no Python 3.14 failure had been established.
+
+   **Smallest slice:** explicitly select each declared interpreter in CI and run
+   the existing behavioral and installation checks on both.
+
+   **Acceptance criteria**
+
+   - Verify dependency resolution, types, offline tests, OpenAPI drift and clean
+     installed library/CLI journeys on Python 3.13 and 3.14 using the frozen lockfile.
+   - Report interpreter versions so `.python-version` cannot silently cause both
+     matrix entries to use Python 3.13. Keep the default development interpreter.
+   - Keep archive/container checks at the necessary scope; avoid duplicate image
+     builds just to create a matrix. Investigate any incompatibility before changing
+     supported versions, and document any required compatibility correction.
+   - Record actual per-version outcomes. An unrun or failing interpreter remains
+     unverified; adding workflow configuration alone does not complete this task.
+
+4. **Preserve unexpected adapter translation errors**
+
+   **Owner:** `ingestion/openalex` payload translation.
+   **Assignee:** Codex. **Status:** implemented and verified (2026-09-17).
+
+   Replaced broad identifier catches with `InvalidIdentifierError` and removed
+   singleton lookup's catch-all translation wrapper. Expected malformed metadata
+   keeps its documented outcome; programming errors propagate consistently across
+   lookup, title search and incoming pages. No new abstraction or dependency was
+   required. The 27 regression cases reproduced 13 failures before the fix and
+   all pass after it. Both Python versions pass 271 tests, lint/format, types,
+   OpenAPI, clean wheel/source journeys and host process smoke. Docker remains
+   unverified because its daemon could not start without administrator setup.
+   See [acceptance evidence](verification.md#adapter-error-handling-verification-2026-09-17).
+
+For each assignment, move queued → in progress → verified only as evidence permits.
+Use blocked with a concrete reason when necessary. Update this tracker and
+[verification evidence](verification.md) together, retaining previous dated results.
+Completion means the task's acceptance criteria and relevant README checks pass;
+planning or assignment alone does not count as implementation.
+
+## Completed capability tasks
 
 1. **Ingest a paper by identifier**
 
