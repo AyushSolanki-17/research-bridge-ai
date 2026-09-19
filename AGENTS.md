@@ -4,6 +4,13 @@
 
 Read [next steps](docs/next-steps.md), [coding style](docs/coding-style.md), [product context](docs/product.md), [architecture](docs/architecture.md), and the affected capability README. Architecture governs placement; product context governs research semantics. This repo implements identifier resolution, title candidate search and bounded outgoing, incoming and combined citation exploration through the library, HTTP and CLI. Metadata filters apply to returned results after bounded traversal. Read README.md for runnable checks and report only verification actually performed.
 
+For navigation, use the [source map](src/research_bridge/README.md) and
+[extension guide](docs/extending.md). Use `make check` for the shared local/CI gate;
+[development commands](docs/development.md) include direct uv equivalents, focused
+tests and installation verification. Read historical evidence only when relevant
+to the requested behavior. These instructions apply across coding tools; there is
+no separate model-specific architecture or duplicated instruction set.
+
 ## Contribution policy
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for Conventional Commits and ownership/reuse review. Follow the same policy when writing commits as an agent. Repository instructions, skills and tooling are owned and edited in this clone; no external template synchronization is required.

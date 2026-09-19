@@ -22,7 +22,7 @@ src/research_bridge/
   cli.py                       command-line entrypoint
 tests/                         mirrors source capabilities and cross-capability journeys
 migrations/                    ordered schema changes with capability ownership
-scripts/                       OpenAPI contract export
+scripts/                       contract export and distribution/installation checks
 contracts/                     this backend's API schema policy
 docs/                          product, architecture and decisions
 .agents/skills/                 focused implementation workflows
@@ -31,7 +31,7 @@ docs/                          product, architecture and decisions
 | Source module | Owns |
 |---|---|
 | `research/papers/` | Canonical scholarly works, identifiers and paper metadata. Add other research entities only when a query needs them. |
-| `knowledge_graph/` | Typed relationships, graph persistence, bounded traversal and paths. |
+| `knowledge_graph/` | Directed citation relationships, bounded traversal, result filters and partial-result semantics. No persistence is implemented. |
 | `provenance/` | Evidence records, source attribution and confidence semantics. Evidence references remain stable across ingestion, graph queries and answers. |
 | `ingestion/openalex/` | OpenAlex acquisition and normalization into canonical research records. Provider payloads and SDKs stay in infrastructure; application code coordinates bounded, resumable ingestion through ports. |
 
@@ -69,7 +69,7 @@ Across capabilities, import supported application exports or stable domain value
 
 Keep the root `pyproject.toml` and `uv.lock`; no workspace or per-capability distribution is needed. Root `migrations/` owns ordered database migrations, with explicit capability ownership on every change. Capabilities own writes to their data; cross-capability writes go through use cases. Document consistency, backfill resumability, rolling compatibility and recovery. Add Alembic configuration only when relational migrations exist.
 
-Mirror source ownership in `tests/`; separate domain/use-case tests, adapter integrations and API/CLI journeys as needed. CI runs lint/type checks, static inward-import enforcement, API tests, deterministic schema export and package/container builds. Static import checks do not resolve runtime imports or prove all cross-capability API rules. Tests must prove behavior and boundaries, not that empty scaffold files exist.
+Mirror source ownership in `tests/`; separate domain/use-case tests, adapter integrations and API/CLI journeys as needed. CI runs lint/type checks, static layer and capability dependency enforcement, API tests, deterministic schema export and package/container builds. Static checks resolve absolute/relative imports, enforce the documented capability dependency graph and reserve concrete adapter composition for API assembly and CLI. They do not resolve dynamic imports or prove every exported-symbol contract. Tests must prove behavior and boundaries, not that empty scaffold files exist.
 
 Python, FastAPI, uv and pytest remain the implementation direction. Dependency manifests, lockfiles, Dockerfile and runnable instructions are now present. Database, graph, vector, LLM and queue adapters are selected for demonstrated workloads. Bound graph depth, nodes, edges, results and time; preserve cancellation, source evidence and explicit inference status. Apply external timeouts, bounded retries and operation-scoped idempotency.
 
@@ -104,3 +104,14 @@ status, shared budgets and pre-filter counts remain explicit. HTTP schemas and C
 construct the same predicate contract; neither transport duplicates matching rules.
 Existing paper and evidence values supply inspection data without another provider port,
 server-side session, persisted graph or duplicated metadata model.
+
+## Developer entrypoints
+
+The [source map](../src/research_bridge/README.md) pairs implementation owners with
+their tests. The [extension guide](extending.md) traces concrete changes across
+those boundaries. `Makefile` composes the existing verification tools, and CI uses
+the same check/install targets. No runtime task framework is introduced.
+
+OpenAlex's stateless payload translation lives beside its HTTP adapter in
+`infrastructure/translation.py`; client ownership, retries and request accounting
+remain in `openalex_adapter.py`. All acquisition paths call the same translator.
