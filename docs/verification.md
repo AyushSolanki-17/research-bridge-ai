@@ -1,5 +1,26 @@
 # Backend verification evidence
 
+## Test-client dependency review 2026-09-21
+
+Revisited the only queued assignment under the frozen Python 3.13.13 environment.
+The focused API and research journey suite passed 35 tests while reproducing the
+single `anyio.abc.BlockingPortal` deprecation from Starlette 1.6.0. A targeted
+`uv lock --upgrade-package starlette --dry-run` query against PyPI resolved the
+existing 33 packages and reported no lockfile changes.
+
+The shared `make check` gate passed: Ruff lint and formatting, strict mypy over 26
+source files, all 293 offline tests and OpenAPI drift. Pytest retained exactly the
+same one upstream warning. The first restricted run could not access uv's shared
+cache; the permitted rerun passed without source or dependency changes.
+
+The [upstream correction](https://github.com/Kludex/starlette/pull/3498) was merged
+on 2026-09-05 and changes the test client to `anyio.from_thread.BlockingPortal`.
+The [latest published Starlette package](https://pypi.org/project/starlette/)
+remains 1.6.0 from 2026-08-08, so no released compatible update contains the fix.
+The assignment remains blocked on an upstream release. No dependency, source,
+warning filter, HTTP contract or research behavior changed; pinning an older AnyIO
+or vendoring the upstream patch would only move ownership into this repository.
+
 ## Single-interpreter CI verification 2026-09-19
 
 Removed the duplicate Python-version matrix at the user's request. CI now runs one
