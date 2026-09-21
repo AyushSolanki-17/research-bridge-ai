@@ -16,12 +16,16 @@ Actual run evidence lives in [verification](verification.md).
 ### Resolve the remaining test-client dependency deprecation
 
 **Owner:** root dependency manifest/lockfile and API test integration.
-**Status:** blocked on a compatible upstream release at the last dependency review
-(2026-09-17); the 2026-09-18 baseline reproduces the same warning.
+**Status:** blocked on a compatible upstream release. The 2026-09-21 review
+reproduced the warning and confirmed that a targeted Starlette lock refresh has no
+released update to select.
 
 Starlette 1.6.0 evaluates the deprecated `anyio.abc.BlockingPortal` alias. The
 suite passes with the warning visible. The earlier httpx and pytest-asyncio
 warnings were resolved; see [dependency evidence](verification.md#maintenance-verification-2026-09-17).
+Starlette merged the upstream correction on 2026-09-05, but its latest PyPI release
+remains 1.6.0 and predates that correction. See the
+[current dependency review](verification.md#test-client-dependency-review-2026-09-21).
 
 When revisiting this item, reproduce it under the frozen dependencies, check
 current official upstream guidance, and attempt a targeted compatible update.
