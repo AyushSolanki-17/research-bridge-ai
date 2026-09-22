@@ -1,4 +1,4 @@
-"""Enforce inward dependencies and the documented capability dependency graph."""
+"""Enforce the small core/provider/transport dependency boundary."""
 
 import ast
 import importlib.util
@@ -9,17 +9,11 @@ import pytest
 
 SOURCE = Path(__file__).resolve().parents[1] / "src"
 NAMESPACE = "research_bridge"
-LAYERS = {"domain", "application", "interfaces", "infrastructure"}
-CAPABILITIES = {
-    "provenance": set(),
-    "research.papers": {"provenance"},
-    "knowledge_graph": {"research.papers", "provenance"},
-    "ingestion.openalex": {"research.papers", "knowledge_graph", "provenance"},
-}
+BOUNDARY_DEPENDENCIES = {"fastapi", "httpx", "httpx2", "pydantic", "starlette", "uvicorn"}
 
 
 def _imports(source: str, package: str) -> Iterator[tuple[int, str]]:
-    """Resolve static imports, including relative and from-package member imports."""
+    """Resolve static absolute, relative, and from-member imports."""
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -37,53 +31,38 @@ def _within(module: str, parent: str) -> bool:
     return module == parent or module.startswith(f"{parent}.")
 
 
-def _owner(module: str) -> str | None:
-    return next((name for name in CAPABILITIES if _within(module, f"{NAMESPACE}.{name}")), None)
-
-
 def _violation(module: str, target: str) -> str | None:
-    """Explain an illegal dependency without matching unrelated external name segments."""
-    source_layers = set(module.split(".")) & LAYERS
-    target_layers = set(target.split(".")) & LAYERS
-    is_internal = _within(target, NAMESPACE)
-    is_api = _within(module, f"{NAMESPACE}.api")
+    """Return the reason an import crosses the documented package boundary."""
     external = target.split(".")[0]
-    if not is_api and external in {"fastapi", "starlette", "uvicorn"}:
-        return "web dependencies belong in api"
-    if not is_api and _within(target, f"{NAMESPACE}.api"):
-        return "business code cannot depend on api"
-    if source_layers and _within(target, f"{NAMESPACE}.cli"):
-        return "business code cannot depend on cli"
-    if source_layers & {"domain", "application"} and external in {
-        "httpx",
-        "httpx2",
-        "pydantic",
-        "sqlalchemy",
-    }:
-        return "provider, transport and persistence dependencies belong at the boundary"
-    if is_internal:
-        forbidden = set()
-        if "domain" in source_layers:
-            forbidden |= {"application", "infrastructure", "interfaces"}
-        if "application" in source_layers:
-            forbidden |= {"infrastructure", "interfaces"}
-        if "interfaces" in source_layers:
-            forbidden.add("infrastructure")
-        if forbidden & target_layers:
-            return "layers must depend inward"
-        if is_api and module != f"{NAMESPACE}.api.app" and "infrastructure" in target_layers:
-            return "only api.app composes concrete adapters"
-        owner, dependency = _owner(module), _owner(target)
-        if owner is not None and dependency is not None and owner != dependency:
-            if dependency not in CAPABILITIES[owner]:
-                return "dependency reverses capability ownership"
-            if target_layers & {"infrastructure", "interfaces"}:
-                return "cross-capability imports must use application contracts or domain values"
+    is_core = _within(module, f"{NAMESPACE}.core")
+    is_bridge = module == f"{NAMESPACE}.bridge"
+    is_provider = _within(module, f"{NAMESPACE}.providers")
+    is_api = _within(module, f"{NAMESPACE}.api")
+    is_cli = module == f"{NAMESPACE}.cli"
+
+    if (is_core or is_bridge) and external in BOUNDARY_DEPENDENCIES:
+        return "business code cannot depend on provider or transport libraries"
+    if (is_core or is_bridge) and any(
+        _within(target, f"{NAMESPACE}.{boundary}") for boundary in ("api", "providers", "cli")
+    ):
+        return "business code cannot depend on outer adapters"
+    if is_provider and any(
+        _within(target, f"{NAMESPACE}.{boundary}") for boundary in ("api", "cli")
+    ):
+        return "providers cannot depend on delivery interfaces"
+    if is_api and module != f"{NAMESPACE}.api.app" and _within(target, f"{NAMESPACE}.providers"):
+        return "only standalone app assembly may choose a concrete provider"
+    if is_cli and external in {"fastapi", "pydantic", "starlette", "uvicorn"}:
+        return "the CLI cannot depend on the optional server stack"
+    if module == NAMESPACE and any(
+        _within(target, f"{NAMESPACE}.{boundary}") for boundary in ("api", "providers", "cli")
+    ):
+        return "the public business package cannot eagerly import outer adapters"
     return None
 
 
-def test_inward_layer_dependencies() -> None:
-    """Reject actual source dependencies that break layer or capability ownership."""
+def test_package_dependencies_point_outward_from_core() -> None:
+    """Reject source imports that couple business logic to outer adapters."""
     violations = set()
     for path in (SOURCE / NAMESPACE).rglob("*.py"):
         parts = path.relative_to(SOURCE).with_suffix("").parts
@@ -99,67 +78,45 @@ def test_inward_layer_dependencies() -> None:
 @pytest.mark.parametrize(
     ("module", "target"),
     [
-        ("research.papers.domain.paper", "research_bridge.research.papers.application"),
-        ("research.papers.application.resolve_paper", "httpx"),
-        ("research.papers.application.resolve_paper", "pydantic"),
-        ("research.papers.domain.paper", "starlette.responses"),
-        ("provenance.domain.evidence", "research_bridge.research.papers.domain.paper"),
-        ("research.papers.application.ports", "research_bridge.knowledge_graph.application"),
-        ("knowledge_graph.application.explore", "research_bridge.ingestion.openalex"),
-        (
-            "ingestion.openalex.infrastructure.translation",
-            "research_bridge.provenance.infrastructure",
-        ),
-        ("research.papers.interfaces.worker", "research_bridge.research.papers.infrastructure"),
-        ("api.research", "research_bridge.ingestion.openalex.infrastructure.openalex_adapter"),
-        ("knowledge_graph.application.explore", "research_bridge.api.app"),
-        ("research.papers.application.ports", "research_bridge.cli"),
+        ("core.explorer", "httpx"),
+        ("core.search", "pydantic"),
+        ("core.papers", "research_bridge.providers.openalex"),
+        ("bridge", "research_bridge.api"),
+        ("bridge", "research_bridge.providers.openalex"),
+        ("providers.openalex.client", "research_bridge.api"),
+        ("api.router", "research_bridge.providers.openalex"),
         ("cli", "fastapi"),
     ],
 )
 def test_rejects_forbidden_dependencies(module: str, target: str) -> None:
-    """Prove the guard catches representative violations, even when source is clean.
-
-    Args:
-        module: Consumer module relative to the package root.
-        target: Absolute dependency that the architecture prohibits.
-    """
+    """Prove representative boundary violations remain detectable."""
     assert _violation(f"{NAMESPACE}.{module}", target) is not None
 
 
 @pytest.mark.parametrize(
     ("module", "target"),
     [
-        ("api.app", "research_bridge.ingestion.openalex.infrastructure.openalex_adapter"),
-        ("cli", "research_bridge.ingestion.openalex.infrastructure.openalex_adapter"),
-        ("api.research", "research_bridge.knowledge_graph.application"),
-        ("knowledge_graph.application.explore", "research_bridge.research.papers.application"),
-        ("research.papers.domain.paper", "research_bridge.provenance.domain.evidence"),
-        ("ingestion.openalex.infrastructure.openalex_adapter", "httpx"),
-        (
-            "ingestion.openalex.infrastructure.openalex_adapter",
-            "research_bridge.knowledge_graph.application",
-        ),
-        ("research.papers.domain.paper", "example.application"),
+        ("bridge", "research_bridge.core"),
+        ("providers.openalex.client", "research_bridge.core"),
+        ("providers.openalex.client", "httpx"),
+        ("api.router", "research_bridge.bridge"),
+        ("api.router", "fastapi"),
+        ("api.app", "research_bridge.providers.openalex"),
+        ("cli", "research_bridge.providers.openalex"),
     ],
 )
 def test_allows_supported_dependencies(module: str, target: str) -> None:
-    """Keep legitimate composition, value reuse and unrelated external imports allowed.
-
-    Args:
-        module: Consumer module relative to the package root.
-        target: Absolute dependency permitted by the architecture.
-    """
+    """Keep core use, concrete composition, and transport imports permitted."""
     assert _violation(f"{NAMESPACE}.{module}", target) is None
 
 
 def test_resolves_relative_and_member_imports() -> None:
-    """Prevent relative imports and from-package imports from bypassing the guard."""
+    """Prevent relative imports from bypassing dependency checks."""
     imports = set(
         _imports(
-            "from .. import infrastructure\nfrom .ports import ResolvedPaper",
-            "research_bridge.research.papers.application",
+            "from ..providers import openalex\nfrom .ports import ResolvedPaper",
+            "research_bridge.core",
         )
     )
-    assert (1, "research_bridge.research.papers.infrastructure") in imports
-    assert (2, "research_bridge.research.papers.application.ports.ResolvedPaper") in imports
+    assert (1, "research_bridge.providers") in imports
+    assert (2, "research_bridge.core.ports.ResolvedPaper") in imports

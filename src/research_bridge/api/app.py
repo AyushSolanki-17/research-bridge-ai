@@ -1,51 +1,39 @@
-"""Create the HTTP application without starting a server on import."""
+"""Standalone FastAPI application assembly."""
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from research_bridge import __version__
-from research_bridge.api.errors import ERRORS, ErrorResponse, invalid_request, research_error
+from research_bridge import ResearchBridge, __version__
+from research_bridge.api.errors import ERRORS, invalid_request, research_error
 from research_bridge.api.health import router as health_router
-from research_bridge.api.research import router as research_router
-from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
-from research_bridge.knowledge_graph.application import ExploreCitations, IncomingCitationPort
-from research_bridge.research.papers.application import (
-    PaperProviderPort,
-    PaperSearchPort,
-    ResolvePaper,
-    SearchPapers,
-)
+from research_bridge.api.router import create_router
+from research_bridge.providers.openalex import OpenAlexProvider
 
 
-def create_app(
-    provider: PaperProviderPort | None = None,
-    *,
-    search_provider: PaperSearchPort | None = None,
-    incoming_provider: IncomingCitationPort | None = None,
-) -> FastAPI:
-    """Compose research use cases and HTTP routes without acquiring data.
+def install_error_handlers(app: FastAPI) -> None:
+    """Install Research Bridge exception translation on a FastAPI application."""
+    for error_type in ERRORS:
+        app.add_exception_handler(error_type, research_error)
+    app.add_exception_handler(RequestValidationError, invalid_request)
+
+
+def mount_research_bridge(app: FastAPI, bridge: ResearchBridge, *, prefix: str = "/v1") -> None:
+    """Mount Research Bridge routes and error handling into an existing application."""
+    install_error_handlers(app)
+    app.include_router(create_router(bridge, prefix=prefix))
+
+
+def create_app(bridge: ResearchBridge | None = None) -> FastAPI:
+    """Create the standalone service around an injected business façade.
 
     Args:
-        provider: Optional lookup provider for offline testing; defaults to OpenAlex.
-        search_provider: Optional title search provider; defaults to OpenAlex.
-        incoming_provider: Optional incoming provider; otherwise use lookup if supported.
+        bridge: Business façade. The standalone default uses one OpenAlex provider.
 
     Returns:
         Application with health and versioned research routes.
     """
     app = FastAPI(title="Research Bridge API", version=__version__)
-    acquisition = provider if provider is not None else OpenAlexPaperAdapter()
-    app.state.searcher = SearchPapers(
-        search_provider if search_provider is not None else OpenAlexPaperAdapter()
-    )
-    app.state.resolver = ResolvePaper(acquisition)
-    app.state.explorer = ExploreCitations(acquisition, incoming_provider=incoming_provider)
-    for error_type in ERRORS:
-        app.add_exception_handler(error_type, research_error)
-    app.add_exception_handler(RequestValidationError, invalid_request)
+    bridge = bridge or ResearchBridge(OpenAlexProvider())
     app.include_router(health_router)
-    app.include_router(
-        research_router,
-        responses={status: {"model": ErrorResponse} for status in (404, 422, 429, 502, 504)},
-    )
+    mount_research_bridge(app, bridge)
     return app
