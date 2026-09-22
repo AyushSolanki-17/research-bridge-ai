@@ -8,24 +8,27 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from research_bridge.api.app import create_app
+from research_bridge import ResearchBridge
+from research_bridge.api import create_app
 from research_bridge.cli import run
-from research_bridge.knowledge_graph.application import ExplorationLimits, ExploreOutgoing
-from research_bridge.provenance.domain.evidence import Evidence
-from research_bridge.research.papers.application import (
+from research_bridge.core import (
     AcquisitionBudget,
-    ResolvedPaper,
-    ResolvePaper,
-)
-from research_bridge.research.papers.application.errors import (
+    Author,
+    Doi,
+    Evidence,
+    ExplorationLimits,
+    ExploreCitations,
+    OpenAlexWorkId,
+    Paper,
+    PaperIdentifiers,
     PaperNotFoundError,
     ProviderMalformedResponseError,
     ProviderRateLimitedError,
     ProviderRetryExhaustedError,
     ProviderTimeoutError,
+    ResolvedPaper,
+    ResolvePaper,
 )
-from research_bridge.research.papers.domain.identifiers import Doi, OpenAlexWorkId
-from research_bridge.research.papers.domain.paper import Author, Paper, PaperIdentifiers
 
 
 class FixtureProvider:
@@ -66,10 +69,10 @@ def test_resolution_across_library_http_cli(capsys: pytest.CaptureFixture[str]) 
     """All callers receive the same canonical metadata and stable evidence."""
     provider = FixtureProvider()
     record = asyncio.run(ResolvePaper(provider).execute("doi:10.1234/EXAMPLE"))
-    with TestClient(create_app(provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         response = client.post("/v1/papers/resolve", json={"identifier": "doi:10.1234/EXAMPLE"})
     assert response.status_code == 200
-    assert run(["resolve", "doi:10.1234/EXAMPLE"], provider=provider) == 0
+    assert run(["resolve", "doi:10.1234/EXAMPLE"], bridge=ResearchBridge(provider)) == 0
     output = json.loads(capsys.readouterr().out)
     assert output == response.json()
     assert output["evidence"]["id"] == record.evidence.id
@@ -84,14 +87,20 @@ def test_exploration_across_library_http_cli(
     """Success and truncation preserve the same graph and source evidence in every caller."""
     provider = FixtureProvider()
     graph = asyncio.run(
-        ExploreOutgoing(provider).execute("W1", ExplorationLimits(max_nodes=max_nodes))
+        ExploreCitations(provider).execute("W1", ExplorationLimits(max_nodes=max_nodes))
     )
-    with TestClient(create_app(provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         response = client.post(
             "/v1/graphs/outgoing", json={"identifier": "W1", "limits": {"max_nodes": max_nodes}}
         )
     assert response.status_code == 200
-    assert run(["explore", "W1", "--max-nodes", str(max_nodes)], provider=provider) == exit_code
+    assert (
+        run(
+            ["explore", "W1", "--max-nodes", str(max_nodes)],
+            bridge=ResearchBridge(provider),
+        )
+        == exit_code
+    )
     output = json.loads(capsys.readouterr().out)
     http_result = response.json()
     output.pop("elapsed_seconds")
@@ -122,12 +131,12 @@ def test_resolution_error_mapping(
 ) -> None:
     """Both transports expose stable safe errors without internal exception messages."""
     provider = FixtureProvider(failure)
-    with TestClient(create_app(provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         response = client.post("/v1/papers/resolve", json={"identifier": "W1"})
     assert response.status_code == status
     assert response.json()["error"]["code"] == code
     assert "private" not in response.text
-    assert run(["resolve", "W1"], provider=provider) == exit_code
+    assert run(["resolve", "W1"], bridge=ResearchBridge(provider)) == exit_code
     assert json.loads(capsys.readouterr().err) == response.json()
 
 
@@ -147,7 +156,7 @@ def test_resolution_error_mapping(
 def test_http_validation_before_acquisition(body: dict) -> None:
     """Reject invalid identifiers, shapes and budgets before provider work."""
     provider = FixtureProvider()
-    with TestClient(create_app(provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         response = client.post("/v1/graphs/outgoing", json=body)
     assert response.status_code == 422
     assert "code" in response.json()["error"]
@@ -157,11 +166,20 @@ def test_http_validation_before_acquisition(body: dict) -> None:
 def test_cli_invalid_inputs(capsys: pytest.CaptureFixture[str]) -> None:
     """CLI rejects invalid identifiers and limits before provider work."""
     provider = FixtureProvider()
-    assert run(["resolve", "invalid"], provider=provider) == 2
+    assert run(["resolve", "invalid"], bridge=ResearchBridge(provider)) == 2
     assert json.loads(capsys.readouterr().err)["error"]["code"] == "invalid_identifier"
-    assert run(["explore", "W1", "--depth", "4"], provider=provider) == 2
-    assert json.loads(capsys.readouterr().err)["error"]["code"] == "invalid_configuration"
+    assert run(["explore", "W1", "--depth", "4"], bridge=ResearchBridge(provider)) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == "invalid_limits"
     assert provider.calls == []
+
+
+def test_cli_reports_invalid_default_provider_configuration(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Confine environment parsing failures to standalone provider composition."""
+    monkeypatch.setenv("OPENALEX_TIMEOUT", "not-a-number")
+    assert run(["resolve", "W1"]) == 2
+    assert json.loads(capsys.readouterr().err)["error"]["code"] == "invalid_configuration"
 
 
 @pytest.mark.parametrize("missing,status,exit_code", [(True, 404, 3), (False, 502, 4)])
@@ -172,17 +190,17 @@ def test_failed_graphs_remain_inspectable(
     provider = FixtureProvider(
         PaperNotFoundError("W1") if missing else ProviderMalformedResponseError("private")
     )
-    with TestClient(create_app(provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         response = client.post("/v1/graphs/outgoing", json={"identifier": "W1"})
     assert response.status_code == status
     assert response.json()["status"] == "failed"
-    assert run(["explore", "W1"], provider=provider) == exit_code
+    assert run(["explore", "W1"], bridge=ResearchBridge(provider)) == exit_code
     assert json.loads(capsys.readouterr().out)["stop_reasons"] == response.json()["stop_reasons"]
 
 
 def test_documented_schema_contracts() -> None:
     """Versioned routes publish typed success, validation and partial-failure schemas."""
-    schema = create_app(FixtureProvider()).openapi()
+    schema = create_app(ResearchBridge(FixtureProvider())).openapi()
     assert schema["paths"]["/v1/papers/resolve"]["post"]["operationId"] == "resolve_paper"
     responses = schema["paths"]["/v1/graphs/outgoing"]["post"]["responses"]
     assert responses["502"]["content"]["application/json"]["schema"]["$ref"].endswith(
@@ -196,18 +214,18 @@ def test_documented_schema_contracts() -> None:
 def test_partial_failure_and_cli_cancellation(capsys: pytest.CaptureFixture[str]) -> None:
     """Failed acquisition and cancellation retain the seed and asserted edge."""
     provider = FixtureProvider(ProviderMalformedResponseError("private"), failure_at="W2")
-    with TestClient(create_app(provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         response = client.post("/v1/graphs/outgoing", json={"identifier": "W1"})
     assert response.status_code == 502
     assert len(response.json()["nodes"]) == 1
     assert len(response.json()["edges"]) == 1
     assert response.json()["unresolved"][0]["target"] == "W2"
-    assert run(["explore", "W1"], provider=provider) == 4
+    assert run(["explore", "W1"], bridge=ResearchBridge(provider)) == 4
     output = json.loads(capsys.readouterr().out)
     assert output["nodes"] == response.json()["nodes"]
     assert output["edges"] == response.json()["edges"]
     cancelled = FixtureProvider(asyncio.CancelledError(), failure_at="W2")
-    assert run(["explore", "W1"], provider=cancelled) == 130
+    assert run(["explore", "W1"], bridge=ResearchBridge(cancelled)) == 130
     output = json.loads(capsys.readouterr().out)
     assert output["stop_reasons"] == ["cancelled"]
     assert len(output["nodes"]) == 1
@@ -216,9 +234,9 @@ def test_partial_failure_and_cli_cancellation(capsys: pytest.CaptureFixture[str]
 def test_cli_help_and_version(capsys: pytest.CaptureFixture[str]) -> None:
     """Help and version commands remain usable without acquiring a provider record."""
     provider = FixtureProvider()
-    assert run([], provider=provider) == 0
+    assert run([], bridge=ResearchBridge(provider)) == 0
     assert "resolve" in capsys.readouterr().out
     with pytest.raises(SystemExit) as error:
-        run(["--version"], provider=provider)
+        run(["--version"], bridge=ResearchBridge(provider))
     assert error.value.code == 0
     assert provider.calls == []

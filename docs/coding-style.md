@@ -2,17 +2,30 @@
 
 Use the existing manifest, lockfile, formatter and lint/type configuration as the executable style guide. Read neighboring code before introducing a convention. Follow Conventional Commits in CONTRIBUTING.md.
 
-Keep each business invariant with one owner. Use domain/application/infrastructure/interfaces boundaries only where responsibilities require them. Prefer a small working vertical slice over empty layers or a framework of abstractions.
+Keep each business invariant with one owner. Use the documented core/provider/transport
+boundary and focused modules rather than ceremonial layer directories. Prefer a small
+working vertical slice over empty layers or a framework of abstractions.
 
 Apply SOLID pragmatically: cohesive responsibilities, narrow contracts, interchangeable implementations with the same semantics, and dependencies pointing toward business rules. Prefer composition over inheritance. Avoid global mutable state, service locators, god objects and generic utility buckets. Introduce a pattern only to solve a concrete problem and explain why.
 
 Use Python 3.13, snake_case functions/modules, PascalCase classes, explicit type hints and strict mypy for source. Ruff owns formatting/import ordering and the 100-character line limit. Use immutable dataclasses/value objects for validated domain values when useful. Encapsulate invariants and state transitions in cohesive objects; simple stateless transformations can stay functions.
 
-Use constructor injection for use cases and adapters. Define narrow typing.Protocol ports at external boundaries; use Repository for real persistence needs, Adapter for providers/transports, and Strategy only for actual interchangeable behavior. Avoid abstract base classes with one trivial implementation, deep inheritance and pass-through service classes. API and CLI entrypoints wire concrete dependencies.
+Use constructor injection for provider boundaries. Define narrow `typing.Protocol`
+ports at external boundaries; use Repository for real persistence needs, Adapter for
+providers/transports, and Strategy only for actual interchangeable behavior. Avoid
+abstract base classes with one trivial implementation, deep inheritance and pass-through
+service classes. `ResearchBridge` is the supported façade shared by Python, API and CLI.
 
-For example, process health uses an application factory in `api/app.py` to compose the router in `api/health.py` and an immutable `HealthResponse` dataclass to define its response contract. Its stateless HTTP handler needs no service object. When a capability owns validated state or transitions, encapsulate those rules in domain objects; when a use case calls an external provider, inject an adapter through a narrow application-owned port. Each choice should follow the implemented responsibility.
+For example, `api/router.py` closes over an injected `ResearchBridge` and contains only
+HTTP translation. The standalone `api/app.py` chooses OpenAlex, while another FastAPI
+application can mount the same router with its own façade. Operation state such as a
+citation traversal is encapsulated per call; stateless mapping remains functions.
 
-Domain/application types must not depend on FastAPI, ORM or provider SDK objects. HTTP validation and HTTP schemas belong in `api/`; all FastAPI-specific behavior stays in that package. Business modules cannot import the API package or web framework. Other transport validation belongs in its own interfaces; domain validation protects invariants for all callers. Use specific errors and map them at boundaries. Bound network requests with timeouts/retries and propagate cancellation. Do not log credentials or full sensitive payloads.
+Core types and `ResearchBridge` must not depend on FastAPI, Pydantic, HTTPX, ORM or
+provider SDK objects. HTTP validation and schemas belong in `api/`; provider networking
+belongs in `providers/`. Core validation protects invariants for all callers. Use
+specific errors and map them at boundaries. Bound network requests with timeouts and
+finite retries, propagate cancellation, and never log credentials or full payloads.
 
 Test observable behavior: domain invariants, use cases with fakes, adapter contracts with deterministic fixtures and important API/CLI journeys. Keep normal tests offline. Run README checks appropriate to changes; do not add tests solely to assert scaffold structure.
 

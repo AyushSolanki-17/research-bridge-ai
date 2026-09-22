@@ -20,15 +20,15 @@ from pathlib import Path
 from threading import Thread
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
-from research_bridge.ingestion.openalex.infrastructure.settings import OpenAlexSettings
-from research_bridge.knowledge_graph.application import (
+from research_bridge.core import (
     ExplorationFilters,
     ExplorationLimits,
     ExploreCitations,
-    ExploreOutgoing,
+    ResolvePaper,
+    SearchLimits,
+    SearchPapers,
 )
-from research_bridge.research.papers.application import ResolvePaper, SearchLimits, SearchPapers
+from research_bridge.providers.openalex import OpenAlexProvider, OpenAlexSettings
 
 TITLE = "Synthetic citation methods"
 REFERENCES = {
@@ -134,7 +134,7 @@ def provider_server(*, fail_incoming: bool = False) -> Iterator[str]:
         assert not thread.is_alive()
 
 
-def adapter(base_url: str) -> OpenAlexPaperAdapter:
+def adapter(base_url: str) -> OpenAlexProvider:
     """Compose the real adapter with local acquisition and no retry delay.
 
     Args:
@@ -143,7 +143,7 @@ def adapter(base_url: str) -> OpenAlexPaperAdapter:
     Returns:
         Adapter with explicit settings, independent of environment credentials.
     """
-    return OpenAlexPaperAdapter(OpenAlexSettings(base_url=base_url, max_retries=0))
+    return OpenAlexProvider(OpenAlexSettings(base_url=base_url, max_retries=0))
 
 
 def json_value(value: object) -> dict:
@@ -321,7 +321,7 @@ def verify_library_cli() -> None:
         assert output["status"] == limited.status == "truncated"
         assert output["stop_reasons"] == list(limited.stop_reasons) == ["requests"]
         assert output["requests"] == limited.requests == 1
-        missing = asyncio.run(ExploreOutgoing(provider).execute("W30"))
+        missing = asyncio.run(ExploreCitations(provider).execute("W30"))
         output = cli(base_url, ["explore", "W30"], 5)
         assert stable(output) == stable(json_value(missing))
         assert output["stop_reasons"] == ["unresolved_references"]

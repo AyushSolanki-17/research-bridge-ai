@@ -10,8 +10,8 @@ side-effect-free library imports and static inward dependency rules are also che
 For focused development, run the relevant capability tests, for example:
 
 ```sh
-uv run --extra server pytest tests/research/papers tests/ingestion/openalex
-uv run --extra server pytest tests/knowledge_graph tests/test_research_journeys.py
+uv run --extra server pytest tests/core tests/providers/openalex
+uv run --extra server pytest tests/core/test_explorer.py tests/test_research_journeys.py
 ```
 
 Use synthetic providers and HTTP transports for deterministic acquisition outcomes.
