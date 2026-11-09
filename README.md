@@ -52,17 +52,17 @@ published release.
 
 | Change | Start here | Responsibility |
 | --- | --- | --- |
-| Identifiers, paper metadata, title search | [Papers](src/research_bridge/research/papers/README.md) | Canonical values and paper use cases |
-| Citation traversal, limits, filters | [Knowledge graph](src/research_bridge/knowledge_graph/README.md) | Bounded graphs, direction and partial results |
-| Evidence and attribution | [Provenance](src/research_bridge/provenance/README.md) | Stable identity, sources and inference status |
-| OpenAlex HTTP or payloads | [OpenAlex](src/research_bridge/ingestion/openalex/README.md) | Acquisition and canonical translation |
-| HTTP routes and composition | [API](src/research_bridge/api/README.md) | Request/response contracts and server lifecycle |
+| Business API and composition | [bridge.py](src/research_bridge/bridge.py) | Reusable resolution, search, and exploration façade |
+| Models, ports, limits, and rules | [Core](src/research_bridge/core/README.md) | Framework-independent business behavior |
+| OpenAlex HTTP or payloads | [OpenAlex](src/research_bridge/providers/openalex/README.md) | Acquisition and canonical translation |
+| FastAPI embedding and standalone service | [API](src/research_bridge/api/README.md) | Schemas, router, errors, and application assembly |
 | CLI commands | [cli.py](src/research_bridge/cli.py) | Arguments, composition, JSON and exit codes |
 
-Business rules belong to their capabilities. Entrypoints compose narrow provider
-protocols with concrete adapters; immutable values carry validated metadata and
-results. Read the [source map](src/research_bridge/README.md) and
-[worked change paths](docs/extending.md) before adding a module or abstraction.
+Library callers use `ResearchBridge`; FastAPI applications mount a router around a
+caller-owned instance. Business rules remain in `core/`, concrete acquisition stays
+in `providers/`, and transports only translate inputs and outputs. Read the
+[source map](src/research_bridge/README.md) and [worked change paths](docs/extending.md)
+before adding a module or abstraction.
 
 ## Checks and packaging
 

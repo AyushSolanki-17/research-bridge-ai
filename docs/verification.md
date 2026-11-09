@@ -1,5 +1,22 @@
 # Backend verification evidence
 
+## Reusable package architecture verification 2026-09-22
+
+Reorganized the package around a framework-independent `ResearchBridge` façade,
+focused `core` modules, an isolated OpenAlex provider, and thin API/CLI adapters.
+The FastAPI router now accepts a caller-owned façade and can be mounted under a
+custom prefix without application-state dependencies. Static architecture tests
+enforce inward dependency rules, and an embedding test exercises a caller-owned
+FastAPI application.
+
+`make check` passed on Python 3.13.13: Ruff lint and formatting, strict mypy over
+27 source files, 289 offline tests, and byte-for-byte OpenAPI compatibility. One
+upstream Starlette/AnyIO deprecation warning remains visible. `make install-check`
+built and inspected the wheel and source archive, then passed both isolated install
+journeys and consumer typing. `make smoke` passed real HTTP, served documentation,
+all citation modes/depths, CLI execution, and shutdown. No live OpenAlex request,
+container build, remote CI run, publication, or deployment was performed.
+
 ## Test-client dependency review 2026-09-21
 
 Revisited the only queued assignment under the frozen Python 3.13.13 environment.
@@ -222,7 +239,7 @@ source-backed directed citations remain sound choices. No new service, abstracti
 or application dependency was needed.
 
 - **LOW — broad adapter exception handling:**
-  [payload translation](../src/research_bridge/ingestion/openalex/infrastructure/openalex_adapter.py)
+  [payload translation](../src/research_bridge/providers/openalex/mapper.py)
   catches `Exception` around identifier parsing and singleton translation. This
   can classify an internal programming defect as malformed provider data, while
   paginated translation has different catch behavior. The affected boundary is

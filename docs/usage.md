@@ -40,15 +40,14 @@ A valid query with no matches succeeds with no candidates. Blank queries are rej
 ```python
 import asyncio
 
-from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
-from research_bridge.research.papers.application import SearchLimits, SearchPapers
+from research_bridge import ResearchBridge, SearchLimits
+from research_bridge.providers.openalex import OpenAlexProvider
 
-candidates = asyncio.run(
-    SearchPapers(OpenAlexPaperAdapter()).execute("The state of OA", SearchLimits(page_size=5))
-)
+bridge = ResearchBridge(OpenAlexProvider())
+candidates = asyncio.run(bridge.search("The state of OA", SearchLimits(page_size=5)))
 for candidate in candidates.candidates:
     print(candidate.paper.identifiers.openalex_id.value, candidate.paper.title)
-# After reviewing the output, use your chosen identifier with ExploreOutgoing.
+# After reviewing the output, pass the chosen identifier to bridge.explore().
 ```
 
 Search returns `complete` at provider end, `more` with `next_page`, `truncated`
@@ -57,21 +56,22 @@ complete/more, 5 for truncated and 4 for failed; partial candidates remain on st
 Cancellation exits 130 and stops requests. Search limits default to 10 candidates
 per page, 100 total unique candidates, 20 physical requests and 30 seconds per call.
 Later pages replay prior provider pages for deduplication, consuming the same call
-budget. See [pagination and limit semantics](../src/research_bridge/research/papers/README.md#title-candidate-search).
+budget. See [pagination and limit semantics](../src/research_bridge/core/README.md#title-candidate-search).
 
 ## Resolve a paper with the library
 
 The library returns canonical metadata and stable source evidence. This example
 uses live OpenAlex access; the normal test suite remains offline. See
-[provider configuration and limits](../src/research_bridge/ingestion/openalex/README.md).
+[provider configuration and limits](../src/research_bridge/providers/openalex/README.md).
 
 ```python
 import asyncio
 
-from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
-from research_bridge.research.papers.application.resolve_paper import ResolvePaper
+from research_bridge import ResearchBridge
+from research_bridge.providers.openalex import OpenAlexProvider
 
-result = asyncio.run(ResolvePaper(OpenAlexPaperAdapter()).execute("10.7717/peerj.4375"))
+bridge = ResearchBridge(OpenAlexProvider())
+result = asyncio.run(bridge.resolve("10.7717/peerj.4375"))
 print(result.paper.title)
 print(result.evidence.to_dict())
 ```
@@ -79,18 +79,14 @@ print(result.evidence.to_dict())
 ## Explore outgoing citations with the library
 
 ```python
-from research_bridge.knowledge_graph.application import ExplorationLimits, ExploreOutgoing
+from research_bridge import ExplorationLimits
 
-graph = asyncio.run(
-    ExploreOutgoing(OpenAlexPaperAdapter()).execute(
-        result, ExplorationLimits(depth=2, max_nodes=50)
-    )
-)
+graph = asyncio.run(bridge.explore(result, ExplorationLimits(depth=2, max_nodes=50)))
 print(graph.status, graph.stop_reasons)
 ```
 
 This continues the resolution example using its ingested seed. Read the
-[traversal, budget and partial-result contract](../src/research_bridge/knowledge_graph/README.md)
+[traversal, budget and partial-result contract](../src/research_bridge/core/README.md)
 before interpreting graph completeness.
 
 ## Explore incoming or combined citations
@@ -102,13 +98,9 @@ curl -X POST http://localhost:8000/v1/graphs/explore -H 'Content-Type: applicati
 ```
 
 ```python
-from research_bridge.knowledge_graph.application import ExploreCitations, ExplorationLimits
+from research_bridge import ExplorationLimits
 
-graph = asyncio.run(
-    ExploreCitations(OpenAlexPaperAdapter()).execute(
-        "W2741809807", ExplorationLimits(depth=2), mode="both"
-    )
-)
+graph = asyncio.run(bridge.explore("W2741809807", ExplorationLimits(depth=2), mode="both"))
 print(graph.mode, graph.status, graph.unread_incoming_pages)
 ```
 
@@ -116,8 +108,8 @@ Modes are `outgoing` (default), `incoming` and `both`. Edges always point from
 citing to referenced paper. Combined traversal processes outgoing references then
 incoming pages at each expanded node, using one shared budget. Incoming page
 failures preserve earlier records and identify the interrupted page. See the
-[direction and pagination contract](../src/research_bridge/knowledge_graph/README.md#incoming-and-combined-traversal).
-Existing `ExploreOutgoing` imports and `/v1/graphs/outgoing` remain supported.
+[direction and pagination contract](../src/research_bridge/core/README.md#incoming-and-combined-traversal).
+The `/v1/graphs/outgoing` compatibility route remains supported.
 
 ## Filter results and inspect evidence
 
@@ -135,13 +127,13 @@ matches. Filters apply after traversal, within the requested depth and budgets;
 they do not query the full corpus. The seed stays, and filtered edges require
 retained endpoints. Inspect `filters`, `acquired_nodes`, `acquired_edges`, `limits`
 and `status` before interpreting coverage. See the
-[full filter semantics](../src/research_bridge/knowledge_graph/README.md#filter-returned-papers-and-inspect-evidence).
+[full filter semantics](../src/research_bridge/core/README.md#filter-returned-papers-and-inspect-evidence).
 
 ```python
-from research_bridge.knowledge_graph.application import ExplorationFilters
+from research_bridge import ExplorationFilters
 
 graph = asyncio.run(
-    ExploreCitations(OpenAlexPaperAdapter()).execute(
+    bridge.explore(
         "W2741809807",
         ExplorationLimits(depth=2),
         mode="both",

@@ -8,32 +8,24 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import date
 
-from research_bridge import __version__
-from research_bridge.ingestion.openalex.infrastructure.openalex_adapter import OpenAlexPaperAdapter
-from research_bridge.knowledge_graph.application import (
+from research_bridge import ResearchBridge, __version__
+from research_bridge.core import (
     ExplorationCancelled,
     ExplorationFilters,
     ExplorationLimits,
-    ExploreCitations,
-    IncomingCitationPort,
     InvalidFilterError,
-)
-from research_bridge.research.papers.application import (
+    InvalidIdentifierError,
+    InvalidLimitsError,
     InvalidSearchError,
-    PaperProviderPort,
-    PaperSearchPort,
-    ResolvePaper,
-    SearchLimits,
-    SearchPapers,
-)
-from research_bridge.research.papers.application.errors import (
     PaperNotFoundError,
     ProviderMalformedResponseError,
     ProviderRateLimitedError,
     ProviderRetryExhaustedError,
     ProviderTimeoutError,
+    SearchLimits,
+    UnsupportedOperationError,
 )
-from research_bridge.research.papers.domain.identifiers import InvalidIdentifierError
+from research_bridge.providers.openalex import OpenAlexProvider
 
 
 def _json_default(value: object) -> str:
@@ -45,17 +37,13 @@ def _json_default(value: object) -> str:
 def run(
     argv: Sequence[str] | None = None,
     *,
-    provider: PaperProviderPort | None = None,
-    search_provider: PaperSearchPort | None = None,
-    incoming_provider: IncomingCitationPort | None = None,
+    bridge: ResearchBridge | None = None,
 ) -> int:
-    """Run research commands with optional injected acquisition.
+    """Run research commands through the same façade used by Python and HTTP.
 
     Args:
         argv: Command arguments, defaulting to process arguments.
-        provider: Optional offline lookup provider; otherwise compose OpenAlex.
-        search_provider: Optional offline title provider; otherwise compose OpenAlex.
-        incoming_provider: Optional incoming boundary; otherwise use lookup if supported.
+        bridge: Optional configured business façade; defaults to OpenAlex.
 
     Returns:
         Exit code: 0 success, 2 invalid input, 3 missing seed, 4 upstream failure,
@@ -95,20 +83,32 @@ def run(
     if args.command is None:
         parser.print_help()
         return 0
+    if bridge is None:
+        try:
+            bridge = ResearchBridge(OpenAlexProvider())
+        except ValueError:
+            print(
+                json.dumps(
+                    {
+                        "error": {
+                            "code": "invalid_configuration",
+                            "message": "OpenAlex provider configuration is invalid.",
+                        }
+                    }
+                ),
+                file=sys.stderr,
+            )
+            return 2
     try:
         if args.command == "search":
             search_limits = SearchLimits(
                 args.page_size, args.max_results, args.max_requests, args.max_seconds
             )
-            searcher = SearchPapers(
-                search_provider if search_provider is not None else OpenAlexPaperAdapter()
-            )
-            result = asyncio.run(searcher.execute(args.query, search_limits, page=args.page))
+            result = asyncio.run(bridge.search(args.query, search_limits, page=args.page))
             print(json.dumps(asdict(result), default=_json_default, allow_nan=False))
             return 4 if result.status == "failed" else 5 if result.status == "truncated" else 0
-        acquisition = provider if provider is not None else OpenAlexPaperAdapter()
         if args.command == "resolve":
-            record = asyncio.run(ResolvePaper(acquisition).execute(args.identifier))
+            record = asyncio.run(bridge.resolve(args.identifier))
             print(json.dumps(asdict(record), default=_json_default, allow_nan=False))
             return 0
         limits = ExplorationLimits(
@@ -129,9 +129,7 @@ def run(
         }
         filters = ExplorationFilters(**filter_values) if filter_values else None
         graph = asyncio.run(
-            ExploreCitations(acquisition, incoming_provider=incoming_provider).execute(
-                args.identifier, limits, mode=args.mode, filters=filters
-            )
+            bridge.explore(args.identifier, limits, mode=args.mode, filters=filters)
         )
         print(json.dumps(asdict(graph), default=_json_default, allow_nan=False))
         if graph.status == "truncated":
@@ -146,12 +144,15 @@ def run(
         return 130
     except (
         InvalidIdentifierError,
+        InvalidLimitsError,
+        InvalidFilterError,
+        InvalidSearchError,
+        UnsupportedOperationError,
         PaperNotFoundError,
         ProviderRateLimitedError,
         ProviderTimeoutError,
         ProviderMalformedResponseError,
         ProviderRetryExhaustedError,
-        ValueError,
     ) as exc:
         if isinstance(exc, InvalidIdentifierError):
             code, message, status = "invalid_identifier", "Unsupported or malformed identifier.", 2
@@ -159,6 +160,10 @@ def run(
             code, message, status = "invalid_filters", "Invalid metadata filter values.", 2
         elif isinstance(exc, InvalidSearchError):
             code, message, status = "invalid_search", "Invalid title query or candidate page.", 2
+        elif isinstance(exc, InvalidLimitsError):
+            code, message, status = "invalid_limits", "Limits are outside the supported range.", 2
+        elif isinstance(exc, UnsupportedOperationError):
+            code, message, status = "unsupported_operation", "Operation is not configured.", 4
         elif isinstance(exc, PaperNotFoundError):
             code, message, status = "not_found", "Paper not found.", 3
         elif isinstance(exc, ProviderRateLimitedError):
@@ -170,11 +175,7 @@ def run(
         elif isinstance(exc, ProviderRetryExhaustedError):
             code, message, status = "retries_exhausted", "Provider retries exhausted.", 4
         else:
-            code, message, status = (
-                "invalid_configuration",
-                "Invalid filters, limits or provider settings.",
-                2,
-            )
+            raise AssertionError(f"unmapped CLI error: {type(exc).__name__}") from exc
         print(json.dumps({"error": {"code": code, "message": message}}), file=sys.stderr)
         return status
 

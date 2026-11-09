@@ -6,8 +6,9 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from research_bridge.api.app import create_app
-from research_bridge.knowledge_graph.application import (
+from research_bridge import ResearchBridge
+from research_bridge.api import create_app
+from research_bridge.core import (
     ExplorationFilters,
     ExplorationLimits,
     ExploreCitations,
@@ -40,7 +41,7 @@ def test_library_and_installed_cli_journey() -> None:
 def test_search_selection_graph_inspection(provider_url: str, mode: str, depth: int) -> None:
     """Review ambiguous paginated titles and explicitly explore the second candidate."""
     provider = adapter(provider_url)
-    with TestClient(create_app(provider, search_provider=provider)) as client:
+    with TestClient(create_app(ResearchBridge(provider))) as client:
         first = client.post("/v1/papers/search", json={"query": TITLE, "limits": {"page_size": 1}})
         assert first.status_code == 200 and first.json()["status"] == "more"
         second = client.post(
@@ -86,7 +87,7 @@ def test_search_selection_graph_inspection(provider_url: str, mode: str, depth: 
 
 def test_http_incomplete_acquisition(provider_url: str) -> None:
     """Budget and unresolved-reference diagnostics survive result filtering."""
-    with TestClient(create_app(adapter(provider_url))) as client:
+    with TestClient(create_app(ResearchBridge(adapter(provider_url)))) as client:
         limited = client.post(
             "/v1/graphs/explore",
             json={
@@ -111,7 +112,7 @@ def test_http_incomplete_acquisition(provider_url: str) -> None:
 def test_http_failure_after_incoming_page() -> None:
     """An actual upstream HTTP failure retains acquired papers and their evidence."""
     with provider_server(fail_incoming=True) as base_url:
-        with TestClient(create_app(adapter(base_url))) as client:
+        with TestClient(create_app(ResearchBridge(adapter(base_url)))) as client:
             response = client.post(
                 "/v1/graphs/explore", json={"identifier": "W10", "mode": "incoming", "filters": {}}
             )

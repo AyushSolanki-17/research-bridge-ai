@@ -6,14 +6,12 @@ scripts/verify_installation.py. No server dependencies or provider calls are nee
 
 from typing import assert_type
 
-from research_bridge.knowledge_graph.application import (
+from research_bridge import ResearchBridge
+from research_bridge.core import (
     ExplorationFilters,
     ExplorationLimits,
     ExplorationResult,
     ExploreCitations,
-    ExploreOutgoing,
-)
-from research_bridge.research.papers.application import (
     PaperProviderPort,
     PaperSearchPort,
     ResolvedPaper,
@@ -39,4 +37,7 @@ async def inspect_results(provider: PaperProviderPort, search_provider: PaperSea
         record, ExplorationLimits(depth=1), filters=ExplorationFilters(min_citations=0)
     )
     assert_type(graph, ExplorationResult)
-    assert_type(await ExploreOutgoing(provider).execute(record), ExplorationResult)
+    bridge = ResearchBridge(provider, search_provider=search_provider)
+    assert_type(await bridge.resolve("W1"), ResolvedPaper)
+    assert_type(await bridge.search("Synthetic title"), SearchResult)
+    assert_type(await bridge.explore(record), ExplorationResult)

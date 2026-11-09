@@ -163,8 +163,8 @@ planning or assignment alone does not count as implementation.
    **Owner:** `research/papers`, `provenance`, `ingestion/openalex`.
 
    **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
-   Offline evidence lives in `tests/research/papers`, `tests/provenance` and
-   `tests/ingestion/openalex`: equivalent/invalid identifiers, two synthetic seeds,
+   Offline evidence now lives in `tests/core` and `tests/providers/openalex`:
+   equivalent/invalid identifiers, two synthetic seeds,
    metadata translation, evidence round trips, actual redirects, bounded settings,
    rate limiting and cancellation. Live-provider availability is not a test gate.
    HTTP/CLI research commands and graph traversal are outside this completed slice.
@@ -205,8 +205,8 @@ planning or assignment alone does not count as implementation.
    **Owner:** `knowledge_graph`.
 
    **Assignee:** Codex. **Status:** implemented and verified (2026-09-08).
-   Acceptance evidence: deterministic tests in `tests/knowledge_graph/test_explore.py`
-   and `tests/ingestion/openalex/test_operation_budget.py`. These cover hop depth,
+   Acceptance evidence: deterministic tests in `tests/core/test_explorer.py`
+   and `tests/providers/openalex/test_operation_budget.py`. These cover hop depth,
    cycles, deduplication, canonical merges, evidence, all count boundaries,
    controlled elapsed time, incomplete references, failures and cancellation.
    Numeric limits and exact completeness semantics are documented in the capability
@@ -269,7 +269,7 @@ planning or assignment alone does not count as implementation.
    **Owner:** `research/papers`, `ingestion/openalex`.
 
    **Assignee:** Codex. **Status:** implemented and verified (2026-09-09).
-   Evidence: `tests/research/papers/test_search_papers.py` exercises ambiguous titles,
+   Evidence: `tests/core/test_search.py` exercises ambiguous titles,
    explicit selection into outgoing exploration, no matches, cursor pagination,
    duplicate candidates, repeated cursors, exact result/request/time limits,
    cancellation, partial failure and library/HTTP/CLI contracts. The adapter reuses
@@ -313,7 +313,7 @@ planning or assignment alone does not count as implementation.
    outgoing entrypoints remain compatible; responses add mode and interrupted
    incoming-page context. No dependency or database migration is introduced.
 
-   Evidence: `tests/knowledge_graph/test_incoming.py` covers asymmetric graphs at
+   Evidence: `tests/core/test_incoming.py` covers asymmetric graphs at
    every supported depth/mode, pagination, cycles, duplicate records, repeated
    cursors, exact count and elapsed boundaries, shared budgets, cancellation,
    partial failures, malformed pages, physical retry accounting and transport
@@ -356,7 +356,7 @@ planning or assignment alone does not count as implementation.
    acquisition counts/status. Missing metadata never matches an active predicate.
    No dependencies, persistence or migration are introduced.
 
-   Evidence: `tests/knowledge_graph/test_filters.py` covers each predicate,
+   Evidence: `tests/core/test_filters.py` covers each predicate,
    combinations, boundaries, missing values, invalid input before acquisition,
    traversal through excluded intermediates, partial results, cancellation and
    source inspection across library/HTTP/CLI. Ruff lint/format, strict mypy,

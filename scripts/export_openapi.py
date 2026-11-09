@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from research_bridge.api.app import create_app
+from research_bridge.api import create_app
 
 
 def main() -> None:

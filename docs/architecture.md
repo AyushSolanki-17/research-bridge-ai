@@ -1,117 +1,106 @@
 # Architecture
 
-Status: the library, HTTP and CLI resolve identifiers and explore bounded outgoing, incoming and combined citation neighborhoods with metadata filtering through the same application use cases. OpenAlex acquisition counts physical requests, redirects and retries against operation budgets. Knowledge graph owns breadth-first traversal, directed edges, evidence and partial-result semantics. API assembly and CLI compose the provider; HTTP schemas and error mapping stay in `api/`. Title candidate search is owned by the paper application through a separate search port; the OpenAlex adapter reuses bounded HTTP acquisition and canonical metadata translation. Stateless public pages replay and deduplicate provider cursor pages. See [runtime commands](../README.md).
+Research Bridge is a framework-independent business library with optional OpenAlex,
+FastAPI, and CLI adapters. `ResearchBridge` is the public façade. It coordinates
+resolution, title search, and bounded citation exploration without importing a web
+framework or constructing a concrete provider.
 
-## Source layout
-
-Incoming and combined exploration reuse the same `ExploreCitations` state and
-budgets as outgoing exploration (`ExploreOutgoing` remains a compatible alias).
-Knowledge graph owns `IncomingCitationPort` and `IncomingPage`, implemented by
-the OpenAlex adapter with cursor acquisition. Incoming edges require explicit
-references in the citing record; missing or contradictory assertions fail with
-partial data. HTTP exposes modes through `/v1/graphs/explore`; CLI uses `--mode`.
-No database, additional dependency or persistent pagination session is needed.
+## Package layout
 
 ```text
 src/research_bridge/
-  research/papers/
-  knowledge_graph/
-  provenance/
-  ingestion/openalex/
-  api/                         all FastAPI code: app, routes, HTTP schemas and server
-  cli.py                       command-line entrypoint
-tests/                         mirrors source capabilities and cross-capability journeys
-migrations/                    ordered schema changes with capability ownership
-scripts/                       contract export and distribution/installation checks
-contracts/                     this backend's API schema policy
-docs/                          product, architecture and decisions
-.agents/skills/                 focused implementation workflows
+  __init__.py               small supported public API
+  bridge.py                 shared business façade
+  core/
+    identifiers.py          DOI and OpenAlex identifier parsing
+    papers.py               canonical paper values
+    evidence.py             source attribution and inference status
+    citations.py            graph limits, results, and status values
+    filters.py              metadata predicates
+    budget.py               request and deadline accounting
+    ports.py                provider protocols and acquisition page values
+    resolution.py           identifier resolution
+    search.py               bounded title candidate search
+    explorer.py             breadth-first citation traversal
+  providers/openalex/
+    client.py               HTTP operations, retries, and pagination
+    mapper.py               pure provider-payload translation
+    settings.py             explicit/environment configuration
+  api/
+    schemas.py              HTTP request models and input translation
+    router.py               injectable router factory
+    errors.py               application-error to HTTP translation
+    health.py               process-liveness route
+    app.py                  standalone composition and embedding helpers
+    server.py               Uvicorn command entrypoint
+  cli.py                    command-line adapter over ResearchBridge
 ```
 
-| Source module | Owns |
-|---|---|
-| `research/papers/` | Canonical scholarly works, identifiers and paper metadata. Add other research entities only when a query needs them. |
-| `knowledge_graph/` | Directed citation relationships, bounded traversal, result filters and partial-result semantics. No persistence is implemented. |
-| `provenance/` | Evidence records, source attribution and confidence semantics. Evidence references remain stable across ingestion, graph queries and answers. |
-| `ingestion/openalex/` | OpenAlex acquisition and normalization into canonical research records. Provider payloads and SDKs stay in infrastructure; application code coordinates bounded, resumable ingestion through ports. |
-
-## Capability convention
-
-Business capabilities use these boundaries only where needed; HTTP transport lives separately in `api/`:
-
-```text
-<capability>/
-  __init__.py                  intentional exports, no eager infrastructure imports
-  domain/                      entities, value objects, invariants, domain errors
-  application/                 use cases, commands/queries, DTOs and required ports
-  infrastructure/              persistence, providers and implementations of ports
-  interfaces/                  optional non-HTTP handlers, independent of FastAPI
-```
-
-A directory or file exists only when its responsibility is needed. Small capabilities can begin with `domain/entities.py` or one use case. Do not create boilerplate services, repositories, factories or validators just to match a template. A repository abstraction belongs beside its consuming use case in `application/`; an implementation belongs in `infrastructure/`. Place a port in domain only when a domain operation itself requires that abstraction.
-
-Application `schemas.py` means framework-independent command/result DTOs. HTTP request/response schemas, routers, dependencies, middleware and server setup belong exclusively to `src/research_bridge/api/`. Domain errors express invariants; application errors express use-case failures; API handlers translate them into HTTP errors; other interfaces translate them for their own transport. `service.py` is optional and should represent a named use case or cohesive behavior, not an all-purpose manager.
+The package deliberately does not use nested `domain/application/infrastructure`
+folders. At this size, explicit modules and one dependency boundary are easier to
+navigate and enforce.
 
 ## Dependency direction
 
 ```text
-interfaces     → application → domain
-infrastructure → application ports + domain
-api routes     → application contracts
-api app / cli  → infrastructure + application
+FastAPI / CLI ──> ResearchBridge ──> core operations and ports
+       │                                  ▲
+       └──────── OpenAlex provider ───────┘
 ```
 
-Domain does not import application, infrastructure, interfaces, FastAPI, ORM or provider SDK types. Application does not import infrastructure or interfaces. Interfaces call use cases and receive dependencies; they do not construct concrete adapters. API assembly and CLI entrypoints construct concrete dependencies without business rules. API routers receive dependencies and call supported application contracts. All package code outside `api/` is independent of FastAPI, Starlette, Uvicorn and `research_bridge.api`.
+- `core/` and `bridge.py` contain business behavior and cannot import FastAPI,
+  Pydantic, HTTPX, Uvicorn, CLI, or provider implementations.
+- `providers/` implement core-owned ports and map external data into core values.
+- `api/router.py` receives a configured `ResearchBridge`; it never selects a provider.
+- Only `api/app.py` and `cli.py` choose OpenAlex for their standalone defaults.
+- External FastAPI applications mount `create_router(bridge)` or call
+  `mount_research_bridge(app, bridge)`.
 
-Across capabilities, import supported application exports or stable domain value types; never another capability's infrastructure, interface internals or tables. An `__init__.py` exports only deliberately supported symbols when implementation exists. Prevent circular dependencies with consumer-owned ports and entrypoint-wired adapters. Adapters may call another capability's supported application contract without making the consumer's application layer import its implementation. Use direct calls before introducing messaging.
+Static checks in `tests/test_architecture.py` enforce these rules against real imports.
 
-## Persistence, tests and runtime
+## Public business API
 
-Keep the root `pyproject.toml` and `uv.lock`; no workspace or per-capability distribution is needed. Root `migrations/` owns ordered database migrations, with explicit capability ownership on every change. Capabilities own writes to their data; cross-capability writes go through use cases. Document consistency, backfill resumability, rolling compatibility and recovery. Add Alembic configuration only when relational migrations exist.
+Library consumers import `ResearchBridge` and common request/result values from the
+package root. More specialized models and provider protocols are available from
+`research_bridge.core`. Concrete OpenAlex configuration is available from
+`research_bridge.providers.openalex`.
 
-Mirror source ownership in `tests/`; separate domain/use-case tests, adapter integrations and API/CLI journeys as needed. CI runs lint/type checks, static layer and capability dependency enforcement, API tests, deterministic schema export and package/container builds. Static checks resolve absolute/relative imports, enforce the documented capability dependency graph and reserve concrete adapter composition for API assembly and CLI. They do not resolve dynamic imports or prove every exported-symbol contract. Tests must prove behavior and boundaries, not that empty scaffold files exist.
+The façade exists to keep construction consistent across Python, HTTP, and CLI. It
+does not duplicate business rules: resolution, search, filtering, traversal, and
+budgets remain in focused core modules.
 
-Python, FastAPI, uv and pytest remain the implementation direction. Dependency manifests, lockfiles, Dockerfile and runnable instructions are now present. Database, graph, vector, LLM and queue adapters are selected for demonstrated workloads. Bound graph depth, nodes, edges, results and time; preserve cancellation, source evidence and explicit inference status. Apply external timeouts, bounded retries and operation-scoped idempotency.
+## FastAPI embedding
 
-## Reusable distributions
+```python
+from fastapi import FastAPI
 
-A business module is not a separately released library. The root Python project may publish a single distribution from `src/`, exposing a small documented application API. Keep transport/provider dependencies optional and avoid eager imports so programmatic use does not start servers or require unrelated infrastructure.
+from research_bridge import ResearchBridge
+from research_bridge.api import mount_research_bridge
+from research_bridge.providers.openalex import OpenAlexProvider
 
-Reserve `packages/` for a proven independently installable library with its own consumer need, API, dependencies, build and compatibility lifecycle. Do not create that directory until an extraction is justified. A logical domain boundary alone is not a reason to extract a distribution.
+app = FastAPI()
+mount_research_bridge(app, ResearchBridge(OpenAlexProvider()), prefix="/research/v1")
+```
 
-## Cross-capability rules
+The router uses closures around the supplied façade. It does not write dependencies
+to `app.state`, construct OpenAlex clients, or place research decisions in Pydantic
+validators. HTTP schemas only enforce transport shape and translate into core values.
 
-Research may depend on stable provenance value types. Knowledge graph may depend on research and provenance. Ingestion coordinates writes through supported research and graph application contracts; those lower layers never import ingestion. Keep one canonical paper model and map it into graph representations. Source attribution belongs in provenance; acquisition belongs in ingestion.
+## Runtime semantics
 
-## Capability verification
+One operation-scoped budget counts physical requests, redirects, retries, and elapsed
+time. Citation traversal is breadth-first and bounded by depth, nodes, edges, requests,
+and time. Results explicitly distinguish complete, truncated, and failed acquisition.
+Metadata filters run after traversal. Evidence preserves provider identity, source URL,
+observation time, and inference status. Citation edges mean references, not influence.
 
-Complete offline journeys exercise the real OpenAlex adapter through a synthetic
-HTTP provider, the library, HTTP routes and installed CLI processes. A clean wheel
-check runs the library and CLI without optional server dependencies. These checks
-prove fixture-scoped behavior. An opt-in process smoke runs the installed API/CLI
-inside the image with external networking disabled. A separate dated live smoke
-and manual container inspection are recorded in [verification evidence](verification.md);
-none of these checks establishes corpus completeness or production load capacity.
+OpenAlex is the only implemented provider and canonical work identities are currently
+OpenAlex work IDs. Supporting records without an OpenAlex identity is a deliberate
+public-model change, not an adapter-only addition.
 
-Follow [next steps](next-steps.md) for acceptance evidence and remaining limitations and [coding style](coding-style.md) for OOP and design guidance.
+## Distribution
 
-## Result filtering and evidence inspection
-
-Knowledge graph application owns `ExplorationFilters`: validated metadata predicates
-on canonical papers, composed directly into exploration result construction. Filtering
-runs after traversal, retaining the seed and edges between retained papers. Acquisition
-status, shared budgets and pre-filter counts remain explicit. HTTP schemas and CLI flags
-construct the same predicate contract; neither transport duplicates matching rules.
-Existing paper and evidence values supply inspection data without another provider port,
-server-side session, persisted graph or duplicated metadata model.
-
-## Developer entrypoints
-
-The [source map](../src/research_bridge/README.md) pairs implementation owners with
-their tests. The [extension guide](extending.md) traces concrete changes across
-those boundaries. `Makefile` composes the existing verification tools, and CI uses
-the same check/install targets. No runtime task framework is introduced.
-
-OpenAlex's stateless payload translation lives beside its HTTP adapter in
-`infrastructure/translation.py`; client ownership, retries and request accounting
-remain in `openalex_adapter.py`. All acquisition paths call the same translator.
+The repository builds one typed distribution. FastAPI and Uvicorn remain optional
+server dependencies; importing `research_bridge` does not load them or start services.
+The core, CLI, and OpenAlex provider remain usable without the server extra. There is
+no database, queue, cache, provider registry, service locator, or plugin framework.

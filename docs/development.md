@@ -23,7 +23,7 @@ external service is needed for the normal tests after dependencies are installed
 
 ```sh
 make setup
-uv run --frozen --extra server pytest tests/knowledge_graph -q
+uv run --frozen --extra server pytest tests/core -q
 make format
 make check
 ```
@@ -79,7 +79,7 @@ uv run --frozen --env-file .env --extra server research-bridge-ai-api
 ```
 
 Dotenv files are not loaded implicitly. Keep credentials out of fixtures and logs.
-See [OpenAlex settings](../src/research_bridge/ingestion/openalex/README.md) for
+See [OpenAlex settings](../src/research_bridge/providers/openalex/README.md) for
 provider timeouts, finite retries and optional credentials.
 
 ## Checks and packaging

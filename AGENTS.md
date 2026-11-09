@@ -25,9 +25,22 @@ Google-style documentation is mandatory for new or changed handwritten code: Pyt
 
 ## Ownership and boundaries
 
-Use `src/<namespace>/` business capability modules with `domain/`, `application/`, `infrastructure/`, and `interfaces/` as needed. All FastAPI code belongs in `src/research_bridge/api/`: app assembly, routers, HTTP schemas, dependencies, middleware and server startup. Business capabilities outside `api/` must not import the API package, FastAPI, Starlette or Uvicorn. API routes call framework-independent application contracts; `cli.py` provides the separate command-line entrypoint. Reserve `packages/` for independently reusable libraries.
+Keep framework-independent business values, ports and operations in
+`src/research_bridge/core/`; expose consumer orchestration through
+`src/research_bridge/bridge.py`. Concrete acquisition belongs under
+`src/research_bridge/providers/`. All FastAPI code belongs in
+`src/research_bridge/api/`: schemas, routers, error translation, app assembly and
+server startup. Core and bridge code must not import provider implementations,
+the API package, FastAPI, Pydantic, Starlette, HTTPX or Uvicorn. API routers receive
+a configured `ResearchBridge`; only standalone composition roots such as
+`api/app.py` and `cli.py` choose a concrete provider. Reserve `packages/` for a
+separately released library only when an independent lifecycle is demonstrated.
 
-Follow the explicit dependency rules in the architecture document. Avoid generic shared buckets, circular imports, speculative services and unused abstractions. Keep consistent boundaries with flexible internals: do not require every layer or template file in a small capability. Add dependencies and modules only with a concrete capability. Preserve provenance, typed relationships, source attribution and explicit inference status.
+Follow the explicit dependency rules in the architecture document. Avoid generic
+shared buckets, circular imports, speculative services and unused abstractions.
+Use focused modules rather than ceremonial layer directories. Add dependencies and
+modules only for a concrete responsibility. Preserve provenance, typed relationships,
+source attribution and explicit inference status.
 
 Keep repository content self-contained: source, docs, skills, examples, generated artifacts and release notes describe only the capabilities and dependencies documented here. Do not import surrounding workspace planning files or use parent-directory packaging/build contexts.
 
